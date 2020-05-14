@@ -44,7 +44,7 @@ best_cost = route2cost(route, dist)
 # --
 # Optimal route
 
-opt_tour_path = args.inpath.replace('.tsp', '.opt.tour')
+opt_tour_path = args.inpath.replace('.tsp', '.opt.z')
 if os.path.exists(opt_tour_path):
     opt_route = load_solution(opt_tour_path)
     opt_cost  = route2cost(opt_route, dist)
