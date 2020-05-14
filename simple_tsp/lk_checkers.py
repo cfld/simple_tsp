@@ -9,7 +9,7 @@ from numba import njit
 # --------------------------------------------------------------------------------
 # Wrapper
 
-@njit
+@njit(cache=True)
 def check_move(csh, n_nodes):
     if len(csh) == 4:
         return check2(csh)

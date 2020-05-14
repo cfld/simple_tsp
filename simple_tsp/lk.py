@@ -10,10 +10,30 @@ from numba import njit
 from simple_tsp.lk_checkers import check_move
 
 # --
+# Helpers
+
+@njit(cache=True)
+def edge_exists(u, v, n):
+    return (
+        (u == v + 1) or 
+        (v == u + 1) or 
+        (u == 0 and v == n - 1) or
+        (v == 0 and u == n - 1)
+    )
+
+
+@njit(cache=True)
+def contains(u, v, db):
+    return ((u, v) in db) or ((v, u) in db)
+
+# --
 # Optimize route
 
 @njit(cache=True)
-def lk_solve(dist, near, route, cost, depth=5, lk_neibs=10, use_dlb=False):
+def lk_solve(dist, near, route, depth=5, lk_neibs=10, use_dlb=False):
+    
+    assert route[0] == 0, 'route[0] != 0'
+    assert route[-1] == 0, 'route[-1] != 0'
     
     route   = route[:-1]
     n_nodes = len(route)
@@ -86,7 +106,17 @@ def lk_move(neibs, dist, pos2node, node2pos, c1, c2, n_nodes, max_depth, dlb):
     return _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, sav, n_nodes, 0, max_depth, dlb)
 
 
-@njit(cache=True)
+class CostModel:
+    def __init__(self, n):
+        self._i = 0
+        self._n = n
+
+    def __call__(self, expr, caller, callee):
+        ret = self._i < self._n
+        self._i += 1
+        return ret
+
+@njit(cache=True, inline=CostModel(5))
 def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes, depth, max_depth, dlb):
     fin = cs[0]
     act = cs[2 * depth + 1] # positions
@@ -123,7 +153,7 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
                 if not edge_exists(cp2, fin, n_nodes):
                     saving_closed = saving_n23_o34 - dist[pos2node[cp2], pos2node[fin]]
                     if saving_closed > 0:
-                        if check_sig(csh[:2 * (depth + 2)], n_nodes):
+                        if check_move(csh[:2 * (depth + 2)], n_nodes):
                             return saving_closed, cs[:2 * (depth + 2)]
                 
                 # search deeper

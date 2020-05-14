@@ -6,13 +6,13 @@
 
 import numpy as np
 
-def kick(route):
+def double_bridge_kick(route):
     """ Random double-bridge move """
     
     route   = route[:-1]
     n_nodes = len(route)
     
-    cut   = np.random.choice(n_nodes, 4, replace=False) 
+    cut   = 1 + np.random.choice(n_nodes - 1, 4, replace=False) 
     cut   = np.sort(cut)
     
     zero  = route[:cut[0]]
@@ -22,4 +22,5 @@ def kick(route):
     four  = route[cut[3]:]
     
     new_route = np.hstack([zero, three, two, one, four])
+    
     return np.hstack([new_route, [0]])
