@@ -4,13 +4,15 @@
     main.py
 """
 
+import os
 import json
 import argparse
 import numpy as np
 from time import time
 
 from simple_tsp.lk import lk_solve
-from simple_tsp.prep import load_problem, knn_candidates, random_init
+from simple_tsp.prep import load_problem, load_solution
+from simple_tsp.prep import knn_candidates, random_init
 from simple_tsp.helpers import route2cost
 from simple_tsp.perturb import double_bridge_kick
 
@@ -40,6 +42,16 @@ route     = random_init(n_nodes)
 best_cost = route2cost(route, dist)
 
 # --
+# Optimal route
+
+opt_tour_path = args.inpath.replace('.tsp', '.opt.tour')
+if os.path.exists(opt_tour_path):
+    opt_route = load_solution(opt_tour_path)
+    opt_cost  = route2cost(opt_route, dist)
+else:
+    opt_cost = None
+
+# --
 # Run
 
 t = time()
@@ -55,4 +67,10 @@ for _ in range(args.n_kick_iters):
         best_cost  = cost
     
     route = double_bridge_kick(best_route)
-    print(json.dumps({'cost' : int(cost), 'best_cost' : int(best_cost), 'elapsed' : time() - t}))
+    print(json.dumps({
+        'cost'      : int(cost), 
+        'best_cost' : int(best_cost), 
+        'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
+        'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
+        'elapsed'   : time() - t
+    }))

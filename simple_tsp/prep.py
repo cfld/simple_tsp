@@ -29,6 +29,13 @@ def load_problem(inpath):
     
     return dist, n_nodes
 
+def load_solution(inpath):
+    prob = parse_tsplib(open(inpath).read())
+    
+    tour = prob['TOUR_SECTION'][0]
+    tour = np.array(tour + [1]) - 1
+    return tour
+
 # --
 # Generate candidate edges
 
