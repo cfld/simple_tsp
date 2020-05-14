@@ -5,7 +5,9 @@
 """
 
 import numpy as np
+from numba import njit
 
+@njit(cache=True)
 def double_bridge_kick(route):
     """ Random double-bridge move """
     
@@ -21,6 +23,6 @@ def double_bridge_kick(route):
     three = route[cut[2]:cut[3]]
     four  = route[cut[3]:]
     
-    new_route = np.hstack([zero, three, two, one, four])
+    new_route = np.hstack((zero, three, two, one, four))
     
-    return np.hstack([new_route, [0]])
+    return np.hstack((new_route, np.array([0])))

@@ -30,20 +30,17 @@ def contains(u, v, db):
 # Optimize route
 
 @njit(cache=True)
-def lk_solve(dist, near, route, depth=5, lk_neibs=10, use_dlb=False):
+def lk_solve(dist, near, route, depth=5, use_dlb=False):
     
     assert route[0] == 0, 'route[0] != 0'
     assert route[-1] == 0, 'route[-1] != 0'
     
-    route   = route[:-1]
-    n_nodes = len(route)
+    n_nodes = len(route) - 1
     
-    pos2node = route.copy()
+    pos2node = route[:-1].copy()
     node2pos = np.argsort(pos2node)
     sucs     = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)])
     pres     = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)])
-    
-    near = near[:,:lk_neibs]
     
     offset        = 0
     ever_improved = False
