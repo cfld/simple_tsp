@@ -23,20 +23,20 @@ from simple_tsp.perturb import double_bridge_kick
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/tsplib/d657.tsp')
+    parser.add_argument('--inpath',       type=str, default='data/tsplib/kroC100.tsp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-kick-iters', type=int, default=100)
     parser.add_argument('--depth',        type=int, default=4)
     parser.add_argument('--seed',         type=int, default=123)
-    parser.add_argument('--n-jobs',       type=int, default=16)
+    parser.add_argument('--n-jobs',       type=int, default=32)
     return parser.parse_args()
 
 if __name__ == "__main__":
-    client = Client(n_workers=args.n_jobs, threads_per_worker=2)
-    
     args = parse_args()
     _ = np.random.seed(args.seed)
 
+    client = Client(n_workers=args.n_jobs, threads_per_worker=1)
+    
     # --
     # Load problem
 
@@ -81,22 +81,25 @@ if __name__ == "__main__":
     near_ = client.scatter(near)
 
     q = as_completed(
-        [client.submit(_wrapper, dist_, near_, double_bridge_kick(route), args.depth) for _ in range(args.n_jobs)]
+        [client.submit(_wrapper, dist_, near_, double_bridge_kick(route), args.depth) for _ in range(2 * args.n_jobs)]
     )
 
     t = time()
+    counter = 0
     for res in q:
         new_cost, new_route = res.result()
         if new_cost < best_cost:
             best_cost  = new_cost
             best_route = new_route
+            gap        = (best_cost / opt_cost) - 1 if opt_cost else -1
+            
+            print('*', counter, new_cost, best_cost, gap, time() - t)
+            
+            if gap == 0: break
         
-        gap = (best_cost / opt_cost) - 1 if opt_cost else -1
-        
-        print(new_cost, best_cost, gap, time() - t)
-        
-        if gap == 0:
-            break
+        if counter % 100 == 0:
+            print('-', counter, new_cost, best_cost, gap, time() - t)
         
         q.add(client.submit(_wrapper, dist_, near_, double_bridge_kick(best_route), args.depth))
+        counter += 1
 

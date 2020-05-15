@@ -1,3 +1,4 @@
+dask-worker-space/*
 simple_tsp.egg-info/
 *__pycache__*
 data/*

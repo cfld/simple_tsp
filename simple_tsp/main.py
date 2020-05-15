@@ -57,7 +57,7 @@ else:
 t = time()
 for _ in range(args.n_kick_iters):
     
-    new_route = lk_solve(dist, near, route, depth=args.depth, lk_neibs=args.n_cands)
+    new_route = lk_solve(dist, near, route, depth=args.depth)
     assert len(set(new_route)) == len(set(route))
     
     cost = route2cost(new_route, dist)
