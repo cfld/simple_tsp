@@ -30,3 +30,7 @@ __Note:__ `numba` compiles functions the first time you run the code, so the fir
 - [ ] The `execute_move` function is suboptimally implemented -- per the LKH-3 publication, routes can be modified more efficiently using a linked-list or double-linked-list data structure.
 - [ ] LKH-3 allows for a series of improving k-opt moves that don't yield an improving solution when closed.  Currently, `simple_tsp` only allows a single k-opt move.
 - [ ] These kinds of local search algorithms are typically run inside of some kind of global optimization metaheuristic (genetic algorithm, guided local search, simulated annealing, etc).  Currently `simple_tsp` just uses a perturbation + random restart.
+
+## Todo
+
+- [ ] Benchmarking against {LKH, or-tools, other Python implementations}
