@@ -71,19 +71,18 @@ if __name__ == "__main__":
         new_route = lk_solve(dist, near, route, depth)
         new_cost  = route2cost(new_route, dist)
         return new_cost, new_route
-
-
+        
     _ = _wrapper(dist, near, route, args.depth)
-
+    
     # --
-
+    
     dist_ = client.scatter(dist)
     near_ = client.scatter(near)
-
+    
     q = as_completed(
         [client.submit(_wrapper, dist_, near_, double_bridge_kick(route), args.depth) for _ in range(2 * args.n_jobs)]
     )
-
+    
     t = time()
     counter = 0
     for res in q:
