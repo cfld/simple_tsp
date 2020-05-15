@@ -67,10 +67,16 @@ for _ in range(args.n_kick_iters):
         best_cost  = cost
     
     route = double_bridge_kick(best_route)
+    
+    gap = float(best_cost / opt_cost) - 1 if opt_cost is not None else -1
+    
     print(json.dumps({
         'cost'      : int(cost), 
         'best_cost' : int(best_cost), 
         'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
-        'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
+        'gap'       : gap,
         'elapsed'   : time() - t
     }))
+    
+    if gap == 0:
+        break

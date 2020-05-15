@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 
 """
-    main.py
+    pmain.py
+    
+    Parallelized over perturbations
+    
+    !! Seems to be some lag on initialization, maybe due to numba compilation or dask overhead
+       Could try to track this down by pre-compiling the numba functions
 """
 
 from dask.distributed import Client, as_completed
@@ -25,10 +30,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inpath',       type=str, default='data/tsplib/kroC100.tsp')
     parser.add_argument('--n-cands',      type=int, default=10)
-    parser.add_argument('--n-kick-iters', type=int, default=100)
     parser.add_argument('--depth',        type=int, default=5)
     parser.add_argument('--seed',         type=int, default=123)
     parser.add_argument('--n-jobs',       type=int, default=32)
+    
+    parser.add_argument('--inner-iters',  type=int, default=16)
+    parser.add_argument('--timeout',      type=int, default=60)
     return parser.parse_args()
 
 
@@ -61,19 +68,19 @@ if __name__ == "__main__":
     else:
         opt_cost = None
         gap      = None
-
+        
     # --
-    # Run
-
+    # Setup functions
+    
     _ = lk_solve(dist, near, route, args.depth)
-
+    
     def _wrapper(dist, near, route, depth):
         from simple_tsp.lk import lk_solve
         
         best_route = route
         best_cost  = route2cost(route, dist)
-        for _ in range(32):
-            new_route = lk_solve(dist, near, double_bridge_kick(best_route), depth) # !! Not sure about random seeds here
+        for _ in range(args.inner_iters):
+            new_route = lk_solve(dist, near, double_bridge_kick(best_route), depth) # !! Not positive about random seeds here
             new_cost  = route2cost(new_route, dist)
             if new_cost < best_cost:
                 return new_cost, new_route
@@ -81,6 +88,7 @@ if __name__ == "__main__":
     _ = _wrapper(dist, near, route, args.depth)
     
     # --
+    # Run
     
     dist_ = client.scatter(dist)
     near_ = client.scatter(near)
@@ -107,4 +115,10 @@ if __name__ == "__main__":
         
         q.add(client.submit(_wrapper, dist_, near_, double_bridge_kick(best_route), args.depth))
         counter += 1
+        
+        if time() - t > args.timeout:
+            break
+    
+    print('-' * 50)
+    print('best_cost', best_cost)
 
