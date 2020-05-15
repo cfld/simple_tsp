@@ -26,10 +26,11 @@ def parse_args():
     parser.add_argument('--inpath',       type=str, default='data/tsplib/kroC100.tsp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-kick-iters', type=int, default=100)
-    parser.add_argument('--depth',        type=int, default=4)
+    parser.add_argument('--depth',        type=int, default=5)
     parser.add_argument('--seed',         type=int, default=123)
     parser.add_argument('--n-jobs',       type=int, default=32)
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -68,9 +69,14 @@ if __name__ == "__main__":
 
     def _wrapper(dist, near, route, depth):
         from simple_tsp.lk import lk_solve
-        new_route = lk_solve(dist, near, route, depth)
-        new_cost  = route2cost(new_route, dist)
-        return new_cost, new_route
+        
+        best_route = route
+        best_cost  = route2cost(route, dist)
+        for _ in range(32):
+            new_route = lk_solve(dist, near, double_bridge_kick(best_route), depth) # !! Not sure about random seeds here
+            new_cost  = route2cost(new_route, dist)
+            if new_cost < best_cost:
+                return new_cost, new_route
         
     _ = _wrapper(dist, near, route, args.depth)
     
