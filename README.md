@@ -32,5 +32,5 @@ __Note:__ `numba` compiles functions the first time you run the code, so the fir
 - [ ] These kinds of local search algorithms are typically run inside of some kind of global optimization metaheuristic (genetic algorithm, guided local search, simulated annealing, etc).  Currently `simple_tsp` just uses a perturbation + random restart.
 
 ## Todo
-
+- [ ] Implement better initializations.  Currently initializing randomly.
 - [ ] Benchmarking against {LKH, or-tools, other Python implementations}
