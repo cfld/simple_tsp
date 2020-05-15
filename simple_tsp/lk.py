@@ -37,7 +37,7 @@ def lk_solve(dist, near, route, depth=5, use_dlb=False):
     
     n_nodes = len(route) - 1
     
-    pos2node = route[:-1].copy()
+    pos2node = route[:-1]
     node2pos = np.argsort(pos2node)
     sucs     = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)])
     pres     = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)])
@@ -85,7 +85,7 @@ def lk_solve(dist, near, route, depth=5, use_dlb=False):
 # Find best move
 
 @njit(cache=True)
-def lk_move(neibs, dist, pos2node, node2pos, c1, c2, n_nodes, max_depth, dlb):
+def lk_move(near, dist, pos2node, node2pos, c1, c2, n_nodes, max_depth, dlb):
     
     cs  = np.zeros(2 * max_depth, dtype=np.int64) - 1
     csh = np.zeros(2 * max_depth, dtype=np.int64) - 1
@@ -100,8 +100,7 @@ def lk_move(neibs, dist, pos2node, node2pos, c1, c2, n_nodes, max_depth, dlb):
     
     sav = dist[pos2node[c1], pos2node[c2]] # remove 12
     
-    return _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, sav, n_nodes, 0, max_depth, dlb)
-
+    return _lk_move(near, dist, pos2node, node2pos, cs, csh, new, old, sav, n_nodes, 0, max_depth, dlb)
 
 class CostModel:
     def __init__(self, n):
@@ -114,12 +113,12 @@ class CostModel:
         return ret
 
 @njit(cache=True, inline=CostModel(5))
-def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes, depth, max_depth, dlb):
+def _lk_move(near, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes, depth, max_depth, dlb):
     fin = cs[0]
     act = cs[2 * depth + 1] # positions
     rev = (cs[1] - fin) % n_nodes == 1
     
-    for cp1 in node2pos[neibs[pos2node[act]]]:
+    for cp1 in node2pos[near[pos2node[act]]]:
         
         if dlb[cp1] == 1:                  continue
         if cp1 == -1:                      continue
@@ -155,7 +154,7 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
                 
                 # search deeper
                 if depth < max_depth - 2:
-                    deeper_saving, deeper_cs = _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving_n23_o34, n_nodes, depth + 1, max_depth, dlb)
+                    deeper_saving, deeper_cs = _lk_move(near, dist, pos2node, node2pos, cs, csh, new, old, saving_n23_o34, n_nodes, depth + 1, max_depth, dlb)
                     
                     if deeper_saving > 0:
                         return deeper_saving, deeper_cs
