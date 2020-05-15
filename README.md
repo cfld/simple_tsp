@@ -8,7 +8,7 @@ Written in Python + Numba.
 
 There are a handful of high-performance, high-quality solvers for routing problems (eg, [Concorde](http://www.math.uwaterloo.ca/tsp/concorde.html) and [LKH](http://akira.ruc.dk/~keld/research/LKH-3/).  However, good performance in this domain comes at the expense of complexity.  This project was motivated by the need for a reasonably-high-performance, reasonable-high-quality solver that can be used as a starting point for further experimentation.
 
-Another motivation -- there has been an increasing amount of literature exploring the intersection of combinatorial optimization and machine learning.  Typically, some component (or even all) of the classical solver is replaced w/ a learned component.  Most classical solvers are implemented in C/C++, but most ML research is done in the Python ecosystem , which potentially makes rapid experimentation difficult.  Having a "pretty good" Python solver may lower the barrier of entry for ML people interested in routing problems.
+Another motivation -- there has been an increasing amount of literature exploring the intersection of combinatorial optimization and machine learning.  Typically, some piece (or even all) of the classical solver is replaced w/ a learned component.  Most classical solvers are implemented in C/C++, but most ML research is done in the Python ecosystem , which potentially makes rapid experimentation difficult.  Having a "pretty good" Python solver may lower the barrier of entry for ML people interested in routing problems.
 
 ## Installation
 
