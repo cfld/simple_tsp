@@ -27,6 +27,7 @@ def load_problem(inpath):
             dist = np.round(dist).astype(np.int64)
         elif edge_weight_type == 'CEIL_2D':
             dist = np.ceil(dist).astype(np.int64)
+    
     elif edge_weight_type == 'EXPLICIT':
         edge_weights       = prob['EDGE_WEIGHT_SECTION']
         edge_weight_format = prob['EDGE_WEIGHT_FORMAT']
