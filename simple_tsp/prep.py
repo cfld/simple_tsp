@@ -17,15 +17,39 @@ def load_problem(inpath):
     n_nodes          = prob['DIMENSION']
     edge_weight_type = prob['EDGE_WEIGHT_TYPE']
     
-    assert edge_weight_type in ['EUC_2D', 'CEIL_2D']
+    assert edge_weight_type in ['EUC_2D', 'CEIL_2D', 'EXPLICIT']
     
-    xy   = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
-    dist = squareform(pdist(xy))
-    
-    if edge_weight_type == 'EUC_2D':
-        dist = np.round(dist).astype(np.int64)
-    elif edge_weight_type == 'CEIL_2D':
-        dist = np.ceil(dist).astype(np.int64)
+    if edge_weight_type in ['EUC_2D', 'CEIL_2D']:
+        xy   = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
+        dist = squareform(pdist(xy))
+        
+        if edge_weight_type == 'EUC_2D':
+            dist = np.round(dist).astype(np.int64)
+        elif edge_weight_type == 'CEIL_2D':
+            dist = np.ceil(dist).astype(np.int64)
+    elif edge_weight_type == 'EXPLICIT':
+        edge_weights       = prob['EDGE_WEIGHT_SECTION']
+        edge_weight_format = prob['EDGE_WEIGHT_FORMAT']
+        
+        if edge_weight_format == 'LOWER_DIAG_ROW':
+            dist = np.zeros((n_nodes, n_nodes), dtype=np.int64)
+            cols = np.hstack([np.arange(i + 1) for i in range(n_nodes)])
+            rows = np.hstack([np.repeat(i, i + 1) for i in range(n_nodes)])
+            dist[(rows, cols)] = edge_weights
+            dist = dist + dist.T
+            
+        elif edge_weight_format == 'UPPER_DIAG_ROW':
+            dist = np.zeros((n_nodes, n_nodes), dtype=np.int64)
+            cols = np.hstack([np.arange(i, n_nodes) for i in range(n_nodes)])
+            rows = np.hstack([np.repeat(i, n_nodes - i) for i in range(n_nodes)])
+            dist[(rows, cols)] = edge_weights
+            dist = dist + dist.T
+            
+        elif edge_weight_format == 'FULL_MATRIX':
+            dist = np.array(edge_weights).reshape(n_nodes, n_nodes).astype(np.int64)
+        
+        elif edge_weight_format in ['UPPER_ROW', 'FUNCTION']:
+            raise Exception('!! No parser for `EDGE_WEIGHT_FORMAT` in [`UPPER_ROW`, `FUNCTION`]')
     
     return dist, n_nodes
 
