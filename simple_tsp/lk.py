@@ -14,11 +14,45 @@ from simple_tsp.lk_checkers import check_move
 # --
 # Data types
 
+# Route state
 class RouteState(NamedTuple):
     node2pos : numba.int64[:]
     pos2node : numba.int64[:]
     pres     : numba.int64[:]
     sucs     : numba.int64[:]
+
+# class CapacitatedRouteState(NamedTuple):
+#     node2pos : numba.int64[:]
+#     pos2node : numba.int64[:]
+#     pres     : numba.int64[:]
+#     sucs     : numba.int64[:]
+#     demand   : numba.int64[:]
+
+# Move state
+class MoveState(NamedTuple):
+    cs  : numba.int64[:]
+    csh : numba.int64[:]
+    old : numba.int64[:,:]
+    new : numba.int64[:,:]
+
+# --
+# Factory
+
+@njit(cache=True)
+def init_route_state(route):
+    n_nodes  = len(route)
+    pos2node = route.copy()
+    node2pos = np.argsort(pos2node)
+    
+    rs = RouteState(
+        pos2node = pos2node,
+        node2pos = node2pos,
+        pres     = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)]),
+        sucs     = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)]),
+    )
+    
+    return rs
+
 
 @njit(cache=True)
 def copy_route_state(rs):
@@ -29,11 +63,24 @@ def copy_route_state(rs):
         sucs     = rs.sucs.copy(),
     )
 
-class MoveState(NamedTuple):
-    cs  : numba.int64[:]
-    csh : numba.int64[:]
-    old : numba.int64[:,:]
-    new : numba.int64[:,:]
+
+@njit(cache=True)
+def init_move_state(c1, c2, max_depth):
+    ms = MoveState(
+        cs  = np.zeros(2 * max_depth, dtype=np.int64) - 1,
+        csh = np.zeros(2 * max_depth, dtype=np.int64) - 1,
+        old = np.zeros((max_depth, 2), dtype=np.int64) - 1,
+        new = np.zeros((max_depth - 1, 2), dtype=np.int64) - 1,
+    )
+    
+    ms.cs[0]  = c1
+    ms.cs[1]  = c2
+    ms.csh[0] = 0
+    ms.csh[1] = 1
+    ms.old[0] = (c1, c2)
+    
+    return ms
+
 
 # --
 # Helpers
@@ -66,30 +113,10 @@ def contains(u, v, db):
 # Optimize route
 
 @njit(cache=True)
-def init_route_state(route):
-    n_nodes  = len(route)
-    pos2node = route.copy()
-    node2pos = np.argsort(pos2node)
-    
-    rs = RouteState(
-        pos2node = pos2node,
-        node2pos = node2pos,
-        pres     = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)]),
-        sucs     = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)]),
-    )
-    
-    return rs
-
-
-@njit(cache=True)
-def lk_solve(dist, near, route, max_depth=5, lk_neibs=10, use_dlb=False):
+def lk_solve(dist, near, route, max_depth=5, use_dlb=False):
     
     assert route[0] == 0, 'route[0] != 0'
-    assert route[-1] == 0, 'route[-1] != 0'
     
-    near    = near[:,:lk_neibs]
-    
-    route   = route[:-1]
     n_nodes = len(route)
     rs      = init_route_state(route)
     
@@ -118,27 +145,10 @@ def lk_solve(dist, near, route, max_depth=5, lk_neibs=10, use_dlb=False):
             if use_dlb:
                 dlb[c1] = 1
     
-    return np.hstack((rs.pos2node, np.array([0])))
+    return rs.pos2node
 
 # --
 # Find best move
-
-@njit(cache=True)
-def init_move_state(c1, c2, max_depth):
-    ms = MoveState(
-        cs  = np.zeros(2 * max_depth, dtype=np.int64) - 1,
-        csh = np.zeros(2 * max_depth, dtype=np.int64) - 1,
-        old = np.zeros((max_depth, 2), dtype=np.int64) - 1,
-        new = np.zeros((max_depth - 1, 2), dtype=np.int64) - 1,
-    )
-    
-    ms.cs[0]  = c1
-    ms.cs[1]  = c2
-    ms.csh[0] = 0
-    ms.csh[1] = 1
-    ms.old[0] = (c1, c2)
-    
-    return ms
 
 @njit(cache=True)
 def lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb):
@@ -216,6 +226,8 @@ def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb):
 
 @njit(cache=True)
 def execute_move(cs, rs, n_nodes):
+    # rs_orig = copy_route_state(rs)
+    
     cs_nodes = rs.pos2node[cs]
     for i in range(len(cs)):
         a = cs_nodes[(i - 1) % len(cs)]
@@ -236,9 +248,6 @@ def execute_move(cs, rs, n_nodes):
     curr = rs.pos2node[min_cs]
     
     for step in range(min_cs, max_cs + 1):
-        # if step < min_cs:
-        #     assert rs.pos2node[step] == curr
-        
         rs.pos2node[step] = curr
         rs.node2pos[curr] = step
         
@@ -248,10 +257,6 @@ def execute_move(cs, rs, n_nodes):
         else:
             last = curr
             curr = rs.sucs[curr]
-    
-    # !! Have to walk big portion of the route anyway, so can compute the penalty function here.
-    # !! Need to be able to roll things back if penalty gets rejected
-    # !! Can start from earliest changed node but have to walk all the way to the end
     
     return rs
 

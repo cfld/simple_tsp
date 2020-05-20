@@ -67,11 +67,11 @@ def load_solution(inpath):
 def knn_candidates(dist, n_cands):
     cand_idx = np.argsort(dist, axis=-1)
     cand_idx = cand_idx[:,1:n_cands + 1]
-    
     return cand_idx
 
 # --
 # Generate initial route
 
 def random_init(n_nodes):
-    return np.hstack([[0], 1 + np.random.permutation(n_nodes - 1), [0]])
+    return np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+
