@@ -55,22 +55,27 @@ else:
 # Run
 
 t = time()
-for _ in range(args.n_kick_iters):
+new_route = lk_solve(dist, near, route, max_depth=args.depth, lk_neibs=args.n_cands)
+new_cost  = route2cost(new_route, dist)
+print(time() - t, new_cost)
+
+# t = time()
+# for _ in range(args.n_kick_iters):
     
-    new_route = lk_solve(dist, near, route, depth=args.depth, lk_neibs=args.n_cands)
-    assert len(set(new_route)) == len(set(route))
+#     new_route = lk_solve(dist, near, route, depth=args.depth, lk_neibs=args.n_cands)
+#     assert len(set(new_route)) == len(set(route))
     
-    cost = route2cost(new_route, dist)
+#     cost = route2cost(new_route, dist)
     
-    if cost < best_cost:
-        best_route = new_route.copy()
-        best_cost  = cost
+#     if cost < best_cost:
+#         best_route = new_route.copy()
+#         best_cost  = cost
     
-    route = double_bridge_kick(best_route)
-    print(json.dumps({
-        'cost'      : int(cost), 
-        'best_cost' : int(best_cost), 
-        'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
-        'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
-        'elapsed'   : time() - t
-    }))
+#     route = double_bridge_kick(best_route)
+#     print(json.dumps({
+#         'cost'      : int(cost), 
+#         'best_cost' : int(best_cost), 
+#         'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
+#         'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
+#         'elapsed'   : time() - t
+#     }))
