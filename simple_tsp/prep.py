@@ -12,15 +12,24 @@ from scipy.spatial.distance import squareform, pdist
 # Load problem + compute distance matrix
 
 def load_problem(inpath):
-    prob = parse_tsplib(open(inpath).read())
-    
-    n_nodes          = prob['DIMENSION']
+    return parse_tsplib(open(inpath).read())
+
+def get_distance_matrix(prob, n_vehicles=1):
     edge_weight_type = prob['EDGE_WEIGHT_TYPE']
     
     assert edge_weight_type in ['EUC_2D', 'CEIL_2D', 'EXPLICIT']
     
     if edge_weight_type in ['EUC_2D', 'CEIL_2D']:
-        xy   = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
+        xy = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
+        
+        if n_vehicles > 1:
+            # !! Duplicate depot for extra vehicles
+            xy = np.row_stack([
+                np.repeat(xy[:1], n_vehicles, axis=0),
+                xy[1:]
+            ])
+            assert xy.shape[0] == prob['DIMENSION'] + n_vehicles - 1
+        
         dist = squareform(pdist(xy))
         
         if edge_weight_type == 'EUC_2D':
@@ -29,6 +38,8 @@ def load_problem(inpath):
             dist = np.ceil(dist).astype(np.int64)
     
     elif edge_weight_type == 'EXPLICIT':
+        assert n_vehicles == 1
+        
         edge_weights       = prob['EDGE_WEIGHT_SECTION']
         edge_weight_format = prob['EDGE_WEIGHT_FORMAT']
         
@@ -52,7 +63,7 @@ def load_problem(inpath):
         elif edge_weight_format in ['UPPER_ROW', 'FUNCTION']:
             raise Exception('!! No parser for `EDGE_WEIGHT_FORMAT` in [`UPPER_ROW`, `FUNCTION`]')
     
-    return dist, n_nodes
+    return dist
 
 def load_solution(inpath):
     prob = parse_tsplib(open(inpath).read())
@@ -73,5 +84,6 @@ def knn_candidates(dist, n_cands):
 # Generate initial route
 
 def random_init(n_nodes):
-    return np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+    route = np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+    return route
 

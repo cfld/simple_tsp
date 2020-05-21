@@ -10,23 +10,17 @@ from numba import njit
 from typing import NamedTuple
 
 from simple_tsp.lk_checkers import check_move
+from simple_tsp.helpers import route2cost
 
 # --
 # Data types
 
 # Route state
 class RouteState(NamedTuple):
-    node2pos : numba.int64[:]
-    pos2node : numba.int64[:]
-    pres     : numba.int64[:]
-    sucs     : numba.int64[:]
-
-# class CapacitatedRouteState(NamedTuple):
-#     node2pos : numba.int64[:]
-#     pos2node : numba.int64[:]
-#     pres     : numba.int64[:]
-#     sucs     : numba.int64[:]
-#     demand   : numba.int64[:]
+    node2pos  : numba.int64[:]
+    pos2node  : numba.int64[:]
+    pres      : numba.int64[:]
+    sucs      : numba.int64[:]
 
 # Move state
 class MoveState(NamedTuple):
@@ -39,28 +33,25 @@ class MoveState(NamedTuple):
 # Factory
 
 @njit(cache=True)
-def init_route_state(route):
-    n_nodes  = len(route)
+def init_route_state(route, n_nodes, demand):
     pos2node = route.copy()
     node2pos = np.argsort(pos2node)
     
-    rs = RouteState(
-        pos2node = pos2node,
-        node2pos = node2pos,
-        pres     = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)]),
-        sucs     = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)]),
+    return RouteState(
+        pos2node  = pos2node,
+        node2pos  = node2pos,
+        pres      = np.array([pos2node[(node2pos[i] - 1) % n_nodes] for i in range(n_nodes)]),
+        sucs      = np.array([pos2node[(node2pos[i] + 1) % n_nodes] for i in range(n_nodes)]),
     )
-    
-    return rs
 
 
 @njit(cache=True)
 def copy_route_state(rs):
     return RouteState(
-        node2pos = rs.node2pos.copy(),
-        pos2node = rs.pos2node.copy(),
-        pres     = rs.pres.copy(),
-        sucs     = rs.sucs.copy(),
+        node2pos  = rs.node2pos.copy(),
+        pos2node  = rs.pos2node.copy(),
+        pres      = rs.pres.copy(),
+        sucs      = rs.sucs.copy(),
     )
 
 
@@ -80,6 +71,33 @@ def init_move_state(c1, c2, max_depth):
     ms.old[0] = (c1, c2)
     
     return ms
+
+@njit(cache=True)
+def compute_penalty(pos2node, demand, cap, n_nodes, maxval=-1):
+    pen = 0
+    
+    d0 = demand[pos2node[0]]
+    assert d0 == -1
+    
+    cumload = 0
+    for i in range(1, n_nodes):
+        di = demand[pos2node[i]]
+        if di == -1:
+            if cumload > cap:
+                pen += cumload - cap
+            
+            cumload = 0
+        else:
+            cumload += di
+        
+        # early exit
+        if (maxval >= 0) and pen > maxval:
+            return pen
+    
+    if cumload > cap:
+        pen += cumload - cap
+    
+    return pen
 
 
 # --
@@ -113,12 +131,11 @@ def contains(u, v, db):
 # Optimize route
 
 @njit(cache=True)
-def lk_solve(dist, near, route, max_depth=5, use_dlb=False):
+def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False):
     
     assert route[0] == 0, 'route[0] != 0'
     
-    n_nodes = len(route)
-    rs      = init_route_state(route)
+    rs = init_route_state(route, n_nodes, demand)
     
     offset   = 0
     improved = True
@@ -131,16 +148,17 @@ def lk_solve(dist, near, route, max_depth=5, use_dlb=False):
         
         improved = False
         for _ in range(n_nodes):
-            
             c1 = (offset) % n_nodes
             c2 = (offset + 1) % n_nodes
             offset += 1
             
-            improved, rs = lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb)
-            if improved: break
+            improved, rs = lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap)
+            if improved: 
+                break
             
-            improved, rs = lk_move(near, dist, rs, c2, c1, n_nodes, max_depth, dlb)
-            if improved: break
+            improved, rs = lk_move(near, dist, rs, c2, c1, n_nodes, max_depth, dlb, demand, cap)
+            if improved: 
+                break
             
             if use_dlb:
                 dlb[c1] = 1
@@ -151,10 +169,11 @@ def lk_solve(dist, near, route, max_depth=5, use_dlb=False):
 # Find best move
 
 @njit(cache=True)
-def lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb):
+def lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap):
     ms  = init_move_state(c1, c2, max_depth)
     sav = dist[rs.pos2node[c1], rs.pos2node[c2]] # remove 12
-    return _lk_move(near, dist, rs, ms, sav, n_nodes, 0, max_depth, dlb)
+    pen = compute_penalty(rs.pos2node, demand, cap, n_nodes)
+    return _lk_move(near, dist, rs, ms, sav, n_nodes, 0, max_depth, dlb, pen, demand, cap)
 
 
 class CostModel:
@@ -169,7 +188,7 @@ class CostModel:
 
 
 @njit(cache=True, inline=CostModel(5))
-def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb):
+def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb, pen, demand, cap):
     
     fin = ms.cs[0]
     act = ms.cs[2 * depth + 1] # positions
@@ -186,55 +205,69 @@ def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb):
         
         sav_n23 = sav - dist[rs.pos2node[act], rs.pos2node[cp1]] # add 23
         
-        if sav_n23 > 0:
+        if (pen == 0) and (sav_n23 <= 0): continue
+        
+        for cp2 in [(cp1 - 1) % n_nodes, (cp1 + 1) % n_nodes]:
+            if cp2 == -1:                  continue # impossible
+            if cp2 == fin:                 continue
+            if contains(cp1, cp2, ms.old): continue
             
-            for cp2 in [(cp1 - 1) % n_nodes, (cp1 + 1) % n_nodes]:
-                if cp2 == -1:                  continue # impossible
-                if cp2 == fin:                 continue
-                if contains(cp1, cp2, ms.old): continue
+            ms.new[depth]               = (act, cp1)
+            ms.old[depth + 1]           = (cp1, cp2)
+            ms.cs[2 * (depth + 1)]      = cp1
+            ms.cs[2 * (depth + 1) + 1]  = cp2
+            ms.csh[2 * (depth + 1)]     = (cp1 - fin) % n_nodes if rev else abs(((cp1 - fin) % n_nodes) - n_nodes) % n_nodes
+            ms.csh[2 * (depth + 1) + 1] = (cp2 - fin) % n_nodes if rev else abs(((cp2 - fin) % n_nodes) - n_nodes) % n_nodes
+            
+            sav_n23_o34 = sav_n23 + dist[rs.pos2node[cp1], rs.pos2node[cp2]] # remove 34
+            
+            # exit now
+            if not edge_exists(cp2, fin, n_nodes):
+                sav_closed = sav_n23_o34 - dist[rs.pos2node[cp2], rs.pos2node[fin]]
                 
-                ms.new[depth]               = (act, cp1)
-                ms.old[depth + 1]           = (cp1, cp2)
-                ms.cs[2 * (depth + 1)]      = cp1
-                ms.cs[2 * (depth + 1) + 1]  = cp2
-                ms.csh[2 * (depth + 1)]     = (cp1 - fin) % n_nodes if rev else abs(((cp1 - fin) % n_nodes) - n_nodes) % n_nodes
-                ms.csh[2 * (depth + 1) + 1] = (cp2 - fin) % n_nodes if rev else abs(((cp2 - fin) % n_nodes) - n_nodes) % n_nodes
+                if (pen == 0) and (sav_closed <= 0):                  continue
+                if not check_move(ms.csh[:2 * (depth + 2)], n_nodes): continue
                 
-                sav_n23_o34 = sav_n23 + dist[rs.pos2node[cp1], rs.pos2node[cp2]] # remove 34
+                new_rs  = execute_move(ms.cs[:2 * (depth + 2)], rs, n_nodes)
+                new_pen = compute_penalty(new_rs.pos2node, demand, cap, n_nodes)
+                if (new_pen < pen) or (new_pen == pen and sav_closed > 0):
+                    return True, new_rs
+            
+            # search deeper
+            if depth < max_depth - 2:
+                deeper_improved, deeper_rs = _lk_move(
+                    near      = near, 
+                    dist      = dist, 
+                    rs        = rs, 
+                    ms        = ms, 
+                    sav       = sav_n23_o34, 
+                    n_nodes   = n_nodes, 
+                    depth     = depth + 1, 
+                    max_depth = max_depth, 
+                    dlb       = dlb,
+                    pen       = pen,
+                    demand    = demand,
+                    cap       = cap,
+                )
                 
-                # exit now
-                if not edge_exists(cp2, fin, n_nodes):
-                    sav_closed = sav_n23_o34 - dist[rs.pos2node[cp2], rs.pos2node[fin]]
-                    if sav_closed > 0:
-                        if check_move(ms.csh[:2 * (depth + 2)], n_nodes):
-                            
-                            rs = execute_move(ms.cs[:2 * (depth + 2)], rs, n_nodes)
-                            
-                            return True, rs
-                
-                # search deeper
-                if depth < max_depth - 2:
-                    deeper_improved, deeper_rs = _lk_move(near, dist, rs, ms, sav_n23_o34, n_nodes, depth + 1, max_depth, dlb)
-                    
-                    if deeper_improved:
-                        return True, deeper_rs
-    
+                if deeper_improved:
+                    return True, deeper_rs
+        
     return False, rs
 
 # --
 # Execute move
 
 @njit(cache=True)
-def execute_move(cs, rs, n_nodes):
-    # rs_orig = copy_route_state(rs)
-    
+def execute_move(cs, rs_orig, n_nodes, backward=False):
+    rs       = copy_route_state(rs_orig)
     cs_nodes = rs.pos2node[cs]
     for i in range(len(cs)):
         a = cs_nodes[(i - 1) % len(cs)]
         b = cs_nodes[i]
         c = cs_nodes[(i + 1) % len(cs)]
         
-        if i % 2 == 1:
+        if (i + backward) % 2 == 1:
             if rs.pres[b] == a: rs.pres[b] = c
             if rs.sucs[b] == a: rs.sucs[b] = c
         else:
@@ -259,5 +292,4 @@ def execute_move(cs, rs, n_nodes):
             curr = rs.sucs[curr]
     
     return rs
-
 
