@@ -32,10 +32,10 @@ def get_distance_matrix(prob, n_vehicles=1):
         
         dist = squareform(pdist(xy))
         
-        if edge_weight_type == 'EUC_2D':
-            dist = np.round(dist).astype(np.int64)
-        elif edge_weight_type == 'CEIL_2D':
-            dist = np.ceil(dist).astype(np.int64)
+        # if edge_weight_type == 'EUC_2D':
+        #     dist = np.round(dist).astype(np.int64)
+        # elif edge_weight_type == 'CEIL_2D':
+        #     dist = np.ceil(dist).astype(np.int64)
     
     elif edge_weight_type == 'EXPLICIT':
         assert n_vehicles == 1

@@ -18,10 +18,10 @@ from simple_tsp.perturb import double_bridge_kick
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n367-k17.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-kick-iters', type=int, default=100)
-    parser.add_argument('--max-depth',    type=int, default=4)
+    parser.add_argument('--max-depth',    type=int, default=3)
     parser.add_argument('--seed',         type=int, default=123)
     return parser.parse_args()
 
@@ -36,6 +36,7 @@ prob = load_problem(args.inpath)
 
 if prob['TYPE'] == 'CVRP':
     n_vehicles = prob['VEHICLES']
+    
     cap        = prob['CAPACITY']
     
     demand = np.array(list(prob['DEMAND_SECTION'].values()))
@@ -54,7 +55,17 @@ n_nodes = dist.shape[0]
 # --
 # Initialize route
 
-route     = random_init(n_nodes)
+# <<
+route = random_init(n_nodes)
+# --
+# route = [r[:-1] for r in route]
+# route = np.hstack(route)
+# route[route == route.max()] = -1
+# route[route != -1] += (route == -1).sum()
+# route[route == -1] = np.arange((route == -1).sum())
+# >>
+
+
 best_cost = route2cost(route, dist)
 best_pen  = compute_penalty(route, demand, cap, n_nodes)
 print('init_pen', best_pen)
@@ -76,7 +87,7 @@ t = time()
 for kick_iter in range(args.n_kick_iters):
     
     new_route = lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=args.max_depth)
-    # assert (np.sort(new_route) == np.sort(route)).all()
+    assert (np.sort(new_route) == np.sort(route)).all()
     
     cost = route2cost(new_route, dist)
     pen  = compute_penalty(new_route, demand, cap, n_nodes)
