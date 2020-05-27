@@ -128,23 +128,20 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
     rev = (cs[1] - fin) % n_nodes == 1
     
     for cp1 in node2pos[neibs[pos2node[act]]]:
-        print('1 cand depth=', depth, act, fin, cp1)
-
         if dlb[cp1] == 1:                       continue
         if cp1 == -1:                           continue
         if cp1 == fin:                          continue
         if cp1 == act:                          continue
         if edge_exists(act, cp1, n_nodes):      continue
-        if contains(act, cp1, new[:depth]): continue
+        if contains(act, cp1, new[:depth]):     continue
         
         saving_n23 = saving - dist[pos2node[act], pos2node[cp1]] # add 23
         
         if saving_n23 > 0:
             
             for cp2 in [(cp1 - 1) % n_nodes, (cp1 + 1) % n_nodes]:
-                print('2 cand depth=', depth, act, fin, cp1, cp2)
-                if cp2 == -1:                       continue # impossible
-                if cp2 == fin:                      continue
+                if cp2 == -1:                           continue # impossible
+                if cp2 == fin:                          continue
                 if contains(cp1, cp2, old[:depth + 1]): continue
                 
                 new[depth]               = (act, cp1)
@@ -156,9 +153,7 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
                 
                 saving_n23_o34 = saving_n23 + dist[pos2node[cp1], pos2node[cp2]] # remove 34
                 
-            # exit now
-                print('sav depth=', depth, act, fin, cp1, cp2, saving_n23_o34)
-
+                # exit now
                 if not edge_exists(cp2, fin, n_nodes):
                     saving_closed = saving_n23_o34 - dist[pos2node[cp2], pos2node[fin]]
                     
