@@ -8,6 +8,7 @@ import numpy as np
 from numba import njit
 
 from simple_tsp.lk_checkers import check_move
+from simple_tsp.helpers import route2cost
 
 # --
 # Helpers
@@ -30,7 +31,7 @@ def contains(u, v, db):
 # Optimize route
 
 @njit(cache=True)
-def lk_solve(dist, near, route, depth=5, lk_neibs=10, use_dlb=False):
+def lk_solve(dist, near, route, cost, depth=5, lk_neibs=10, use_dlb=False):
     
     assert route[0] == 0, 'route[0] != 0'
     assert route[-1] == 0, 'route[-1] != 0'
@@ -63,24 +64,28 @@ def lk_solve(dist, near, route, depth=5, lk_neibs=10, use_dlb=False):
             c2 = (offset + 1) % n_nodes
             offset += 1
             
+            print(c1, c2, offset)
             sav, cs = lk_move(near, dist, pos2node, node2pos, c1, c2, n_nodes, depth, dlb)
             
             if sav > 0:
+                cost -= sav
+                print('new cost', cost)
+
                 iter_improved = True
                 ever_improved = True
                 pos2node, node2pos, pres, sucs = execute_move(cs, pos2node, node2pos, pres, sucs, n_nodes)
                 break
             
-            sav, cs = lk_move(near, dist, pos2node, node2pos, c2, c1, n_nodes, depth, dlb)
+            # sav, cs = lk_move(near, dist, pos2node, node2pos, c2, c1, n_nodes, depth, dlb)
             
-            if sav > 0:
-                iter_improved = True
-                ever_improved = True
-                pos2node, node2pos, pres, sucs = execute_move(cs, pos2node, node2pos, pres, sucs, n_nodes)
-                break
+            # if sav > 0:
+            #     iter_improved = True
+            #     ever_improved = True
+            #     pos2node, node2pos, pres, sucs = execute_move(cs, pos2node, node2pos, pres, sucs, n_nodes)
+            #     break
             
-            if use_dlb:
-                dlb[c1] = 1
+            # if use_dlb:
+            #     dlb[c1] = 1
     
     return np.hstack((pos2node, np.array([0])))
 
@@ -123,22 +128,24 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
     rev = (cs[1] - fin) % n_nodes == 1
     
     for cp1 in node2pos[neibs[pos2node[act]]]:
-        
-        if dlb[cp1] == 1:                  continue
-        if cp1 == -1:                      continue
-        if cp1 == fin:                     continue
-        if cp1 == act:                     continue
-        if edge_exists(act, cp1, n_nodes): continue
-        if contains(act, cp1, new):        continue
+        print('1 cand depth=', depth, act, fin, cp1)
+
+        if dlb[cp1] == 1:                       continue
+        if cp1 == -1:                           continue
+        if cp1 == fin:                          continue
+        if cp1 == act:                          continue
+        if edge_exists(act, cp1, n_nodes):      continue
+        if contains(act, cp1, new[:depth]): continue
         
         saving_n23 = saving - dist[pos2node[act], pos2node[cp1]] # add 23
         
         if saving_n23 > 0:
             
             for cp2 in [(cp1 - 1) % n_nodes, (cp1 + 1) % n_nodes]:
-                if cp2 == -1:               continue # impossible
-                if cp2 == fin:              continue
-                if contains(cp1, cp2, old): continue
+                print('2 cand depth=', depth, act, fin, cp1, cp2)
+                if cp2 == -1:                       continue # impossible
+                if cp2 == fin:                      continue
+                if contains(cp1, cp2, old[:depth + 1]): continue
                 
                 new[depth]               = (act, cp1)
                 old[depth + 1]           = (cp1, cp2)
@@ -149,10 +156,14 @@ def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes
                 
                 saving_n23_o34 = saving_n23 + dist[pos2node[cp1], pos2node[cp2]] # remove 34
                 
-                # exit now
+            # exit now
+                print('sav depth=', depth, act, fin, cp1, cp2, saving_n23_o34)
+
                 if not edge_exists(cp2, fin, n_nodes):
                     saving_closed = saving_n23_o34 - dist[pos2node[cp2], pos2node[fin]]
+                    
                     if saving_closed > 0:
+
                         if check_move(csh[:2 * (depth + 2)], n_nodes):
                             return saving_closed, cs[:2 * (depth + 2)]
                 
@@ -188,8 +199,9 @@ def execute_move(cs, pos2node, node2pos, pres, sucs, n_nodes):
     
     last = pos2node[(min_cs - 1) % n_nodes]
     curr = pos2node[min_cs]
-    
+
     for step in range(min_cs, max_cs + 1):
+
         if step < min_cs:
             assert pos2node[step] == curr
         

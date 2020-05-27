@@ -40,7 +40,7 @@ def load_solution(inpath):
 # Generate candidate edges
 
 def knn_candidates(dist, n_cands):
-    cand_idx = np.argsort(dist, axis=-1)
+    cand_idx = np.argsort(dist, axis=-1, kind='stable')
     cand_idx = cand_idx[:,1:n_cands + 1]
     
     return cand_idx

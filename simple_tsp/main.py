@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument('--inpath',       type=str, default='data/tsplib/ch150.tsp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-kick-iters', type=int, default=100)
-    parser.add_argument('--depth',        type=int, default=4)
+    parser.add_argument('--depth',        type=int, default=2)
     parser.add_argument('--seed',         type=int, default=123)
     return parser.parse_args()
 
@@ -38,7 +38,8 @@ near          = knn_candidates(dist, args.n_cands)
 # --
 # Initialize route
 
-route     = random_init(n_nodes)
+# route     = random_init(n_nodes)
+route = np.hstack([np.arange(n_nodes), [0]])
 best_cost = route2cost(route, dist)
 
 # --
@@ -51,26 +52,33 @@ if os.path.exists(opt_tour_path):
 else:
     opt_cost = None
 
+print('starting')
+t = time()
+new_route = lk_solve(dist, near, route, best_cost, depth=args.depth, lk_neibs=args.n_cands)
+print(time() - t)
+cost = route2cost(new_route, dist)
+print('cost', cost)
+
 # --
 # Run
 
-t = time()
-for _ in range(args.n_kick_iters):
+# t = time()
+# for _ in range(args.n_kick_iters):
     
-    new_route = lk_solve(dist, near, route, depth=args.depth, lk_neibs=args.n_cands)
-    assert len(set(new_route)) == len(set(route))
+#     new_route = lk_solve(dist, near, route, depth=args.depth, lk_neibs=args.n_cands)
+#     assert len(set(new_route)) == len(set(route))
     
-    cost = route2cost(new_route, dist)
+#     cost = route2cost(new_route, dist)
     
-    if cost < best_cost:
-        best_route = new_route.copy()
-        best_cost  = cost
+#     if cost < best_cost:
+#         best_route = new_route.copy()
+#         best_cost  = cost
     
-    route = double_bridge_kick(best_route)
-    print(json.dumps({
-        'cost'      : int(cost), 
-        'best_cost' : int(best_cost), 
-        'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
-        'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
-        'elapsed'   : time() - t
-    }))
+#     route = double_bridge_kick(best_route)
+#     print(json.dumps({
+#         'cost'      : int(cost), 
+#         'best_cost' : int(best_cost), 
+#         'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
+#         'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
+#         'elapsed'   : time() - t
+#     }))

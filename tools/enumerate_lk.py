@@ -160,14 +160,12 @@ for c3 in trange(n_nodes):
                                     # assert not check((c1, c2, c3, c4, c5, c6, c7, c8, c9, c10))
 
 
-# print(len(valid), len(invalid))
+assert len(valid & invalid) == 0
 
-# assert len(valid & invalid) == 0
-
-# _2opt = [v for v in valid if len(v) == 4]
-# _3opt = [v for v in valid if len(v) == 6]
-# _4opt = [v for v in valid if len(v) == 8]
-# _5opt = [v for v in valid if len(v) == 10]
+_2opt = [v for v in valid if len(v) == 4]
+_3opt = [v for v in valid if len(v) == 6]
+_4opt = [v for v in valid if len(v) == 8]
+_5opt = [v for v in valid if len(v) == 10]
 
 # for v in sorted(_2opt):
 #     print(v)
@@ -181,40 +179,46 @@ for c3 in trange(n_nodes):
 # for v in sorted(_5opt):
 #     print(v)
 
-# # --
+# --
 
-# from collections import defaultdict
+from collections import defaultdict
 
-
-# def ddict():
-#     return defaultdict(ddict)
-
+def ddict():
+    return defaultdict(ddict)
 
 # def print_clause(tup, indent):
 #     out = ' ' * indent
 #     out += f'if cs[{tup[0]}] <= cs[{tup[1]}]:'
 #     print(out)
 
-# def print_tree(tree, indent=0):
-#     if len(tree) > 0:
-#         for k in sorted(tree.keys()):
-#             print_clause(k, indent)
-#             print_tree(tree[k], indent + 2)
-#     else:
-#         print(' ' * indent, 'return True')
+def print_clause(tup, indent):
+    out = ' ' * indent
+    out += f'if(cs[{tup[0]}] <= cs[{tup[1]}]) {{'
+    print(out)
 
-# def print_fn(sigs):
-#     tree = ddict()
+def print_tree(tree, indent=0):
+    if len(tree) > 0:
+        for k in sorted(tree.keys()):
+            print_clause(k, indent)
+            print_tree(tree[k], indent + 2)
+            print(' ' * indent, '}')
+    else:
+        print(' ' * indent, 'return true;')
+
+def print_fn(sigs):
+    tree = ddict()
     
-#     for v in sigs:
-#         keys = [v[i:i+2] for i in range(len(v) - 1)]
+    for v in sigs:
+        keys = [v[i:i+2] for i in range(len(v) - 1)]
         
-#         tmp = tree
-#         for k in keys:
-#             tmp = tmp[k]
+        tmp = tree
+        for k in keys:
+            tmp = tmp[k]
     
-#     print(f'def check{len(sigs[0]) // 2}(cs):')
-#     print_tree(tree, indent=2)
-#     print('\n  return False')
+    print(f'bool check{len(sigs[0]) // 2}(Int* cs) {{')
+    print_tree(tree, indent=2)
+    print('\n  return false;')
+    print('}')
+    
 
-# print_fn(_4opt)
+print_fn(_5opt)
