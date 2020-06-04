@@ -146,12 +146,7 @@ def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False
     
     dlb = np.zeros(n_nodes)
     
-    counter = {
-        2 : {0 : 0, 1 : 0, 2 : 0, 3 : 0,  4 : 0},
-        3 : {0 : 0, 1 : 0, 2 : 0, 3 : 0,  4 : 0},
-        4 : {0 : 0, 1 : 0, 2 : 0, 3 : 0,  4 : 0},
-        5 : {0 : 0, 1 : 0, 2 : 0, 3 : 0,  4 : 0},
-    }
+    counter = [0, 0, 0, 0]
     
     while improved:
         if use_dlb:
@@ -159,6 +154,7 @@ def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False
         
         improved = False
         for _ in range(n_nodes):
+            
             c1 = (offset) % n_nodes
             c2 = (offset + 1) % n_nodes
             offset += 1
@@ -174,7 +170,8 @@ def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False
             if use_dlb:
                 dlb[c1] = 1
     
-    # print(counter)
+    print(counter)
+    
     return rs.pos2node
 
 # --
@@ -243,14 +240,21 @@ def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb, pen, deman
                 
                 cs_route = rs.pos2route[ms.cs[:2 * (depth + 2)]]
                 
+                # Count CAM vs generic moves -- 90% of moves on this problem are CAM
                 n_routes = len(set(cs_route))
                 if (n_routes > 1) and (n_routes < depth + 2): 
-                    continue
+                    counter[0] += 1 # non-cam
+                else:
+                    counter[1] += 1 # cam
                 
                 new_rs  = execute_move(ms.cs[:2 * (depth + 2)], rs, n_nodes, demand)
                 new_pen = compute_penalty(new_rs.pos2node, demand, cap, n_nodes)
                 if (new_pen < pen) or (new_pen == pen and sav_closed > 0):
-                    # counter[depth + 2][len(set(cs_route[::2]))] += 1
+                    if (n_routes > 1) and (n_routes < depth + 2):
+                        counter[2] += 1
+                    else:
+                        counter[3] += 1
+                    
                     return True, new_rs
             
             # search deeper

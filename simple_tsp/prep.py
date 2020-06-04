@@ -83,7 +83,8 @@ def knn_candidates(dist, n_cands):
 # --
 # Generate initial route
 
-def random_init(n_nodes):
-    route = np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+def random_init(n_nodes, random_state=None):
+    rng   = np.random if random_state is None else np.random.RandomState(random_state)
+    route = np.hstack([[0], 1 + rng.permutation(n_nodes - 1)])
     return route
 

@@ -13,7 +13,7 @@ from time import time
 from simple_tsp.lk import lk_solve, compute_penalty
 from simple_tsp.prep import load_problem, load_solution, get_distance_matrix
 from simple_tsp.prep import knn_candidates, random_init
-from simple_tsp.helpers import route2cost
+from simple_tsp.helpers import route2cost, set_seeds
 from simple_tsp.perturb import double_bridge_kick
 
 def parse_args():
@@ -27,7 +27,7 @@ def parse_args():
 
 args = parse_args()
 
-_ = np.random.seed(args.seed)
+_ = set_seeds(args.seed)
 
 # --
 # Load problem
@@ -56,7 +56,7 @@ n_nodes = dist.shape[0]
 # Initialize route
 
 # <<
-route = random_init(n_nodes)
+route = random_init(n_nodes, random_state=101)
 # --
 # route = [r[:-1] for r in route]
 # route = np.hstack(route)
