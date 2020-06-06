@@ -47,6 +47,8 @@ if prob['TYPE'] == 'CVRP':
 else:
     n_vehicles = 1
 
+print('n_vehicles', n_vehicles)
+
 dist = get_distance_matrix(prob, n_vehicles=n_vehicles)
 near = knn_candidates(dist, args.n_cands)
 
@@ -83,29 +85,32 @@ if prob['TYPE'] == 'TSP':
 # --
 # Run
 
-t = time()
-for kick_iter in range(args.n_kick_iters):
+new_route = lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=2)
+
+
+# t = time()
+# for kick_iter in range(args.n_kick_iters):
     
-    new_route = lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=args.max_depth)
-    assert (np.sort(new_route) == np.sort(route)).all()
+#     new_route = lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=args.max_depth)
+#     assert (np.sort(new_route) == np.sort(route)).all()
     
-    cost = route2cost(new_route, dist)
-    pen  = compute_penalty(new_route, demand, cap, n_nodes)
+#     cost = route2cost(new_route, dist)
+#     pen  = compute_penalty(new_route, demand, cap, n_nodes)
     
-    if (pen, cost) <= (best_pen, best_cost):
-        best_route = new_route.copy()
-        best_cost  = cost
-        best_pen   = pen
+#     if (pen, cost) <= (best_pen, best_cost):
+#         best_route = new_route.copy()
+#         best_cost  = cost
+#         best_pen   = pen
     
-    route = double_bridge_kick(best_route)
+#     route = double_bridge_kick(best_route)
     
-    print(json.dumps({
-        'kick_iter' : kick_iter,
-        'cost'      : int(cost), 
-        'pen'       : int(pen),
-        'best_cost' : int(best_cost), 
-        'best_pen'  : int(best_pen), 
-        'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
-        'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
-        'elapsed'   : time() - t
-    }))
+#     print(json.dumps({
+#         'kick_iter' : kick_iter,
+#         'cost'      : int(cost), 
+#         'pen'       : int(pen),
+#         'best_cost' : int(best_cost), 
+#         'best_pen'  : int(best_pen), 
+#         'opt_cost'  : int(opt_cost) if opt_cost is not None else -1,
+#         'gap'       : float(best_cost / opt_cost) - 1 if opt_cost is not None else -1,
+#         'elapsed'   : time() - t
+#     }))

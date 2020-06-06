@@ -76,8 +76,9 @@ def load_solution(inpath):
 # Generate candidate edges
 
 def knn_candidates(dist, n_cands):
-    cand_idx = np.argsort(dist, axis=-1)
-    cand_idx = cand_idx[:,1:n_cands + 1]
+    tmp      = dist + (np.eye(dist.shape[0]) * dist.max()) # Can't be near self
+    cand_idx = np.argsort(tmp, axis=-1)
+    cand_idx = cand_idx[:,:n_cands]
     return cand_idx
 
 # --

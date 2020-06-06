@@ -134,7 +134,9 @@ def contains(u, v, db):
 # --
 # Optimize route
 
-@njit(cache=True)
+from simple_tsp.cam import cam
+
+@njit#(cache=True)
 def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False):
     
     assert route[0] == 0, 'route[0] != 0'
@@ -146,38 +148,42 @@ def lk_solve(dist, near, route, n_nodes, demand, cap, max_depth=5, use_dlb=False
     
     dlb = np.zeros(n_nodes)
     
-    counter = [0, 0, 0, 0]
+    counter  = [0, 0, 0, 0]
+    counter2 = [0]
     
-    while improved:
-        if use_dlb:
-            dlb.fill(0)
+    # while improved:
+    #     if use_dlb:
+    #         dlb.fill(0)
         
-        improved = False
-        for _ in range(n_nodes):
-            
-            c1 = (offset) % n_nodes
-            c2 = (offset + 1) % n_nodes
-            offset += 1
-            
-            improved, rs = lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap, counter)
-            if improved: 
-                break
-            
-            improved, rs = lk_move(near, dist, rs, c2, c1, n_nodes, max_depth, dlb, demand, cap, counter)
-            if improved: 
-                break
-            
-            if use_dlb:
-                dlb[c1] = 1
+    #     improved = False
+    for _ in range(n_nodes):
+        
+        c1 = (offset) % n_nodes
+        c2 = (offset + 1) % n_nodes
+        offset += 1
+
+        lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap, counter)
+        cam(c1, c2, near, dist, rs, n_nodes, max_depth, dlb, demand, cap, counter2)
+        
+        # improved, rs = lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap, counter)
+        # if improved: 
+        #     break
+        
+        # improved, rs = lk_move(near, dist, rs, c2, c1, n_nodes, max_depth, dlb, demand, cap, counter)
+        # if improved: 
+        #     break
+        
+        if use_dlb:
+            dlb[c1] = 1
     
-    print(counter)
+    print(counter, counter2)
     
     return rs.pos2node
 
 # --
 # Find best move
 
-@njit(cache=True)
+@njit# (cache=True)
 def lk_move(near, dist, rs, c1, c2, n_nodes, max_depth, dlb, demand, cap, counter):
     ms  = init_move_state(c1, c2, max_depth)
     sav = dist[rs.pos2node[c1], rs.pos2node[c2]] # remove 12
@@ -197,15 +203,14 @@ class CostModel:
         return ret
 
 
-@njit(cache=True, inline=CostModel(5))
+
+@njit#(cache=True, inline=CostModel(5))
 def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb, pen, demand, cap, counter):
-    
     fin = ms.cs[0]
     act = ms.cs[2 * depth + 1] # positions
     rev = (ms.cs[1] - fin) % n_nodes == 1
     
-    for cp1 in rs.node2pos[near[rs.pos2node[act]]]:
-        
+    for cp1 in rs.node2pos[near[rs.pos2node[act]]]:        
         if dlb[cp1] == 1:                  continue
         if cp1 == -1:                      continue
         if cp1 == fin:                     continue
@@ -215,7 +220,7 @@ def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb, pen, deman
         
         sav_n23 = sav - dist[rs.pos2node[act], rs.pos2node[cp1]] # add 23
         
-        if (pen == 0) and (sav_n23 <= 0): continue
+        # if (pen == 0) and (sav_n23 <= 0): continue
         
         for cp2 in [(cp1 - 1) % n_nodes, (cp1 + 1) % n_nodes]:
             if cp2 == -1:                  continue # impossible
@@ -238,47 +243,49 @@ def _lk_move(near, dist, rs, ms, sav, n_nodes, depth, max_depth, dlb, pen, deman
                 if (pen == 0) and (sav_closed <= 0):                  continue
                 if not check_move(ms.csh[:2 * (depth + 2)], n_nodes): continue
                 
-                cs_route = rs.pos2route[ms.cs[:2 * (depth + 2)]]
+                cs_route = [rs.pos2route[fin], rs.pos2route[cp1]]
                 
                 # Count CAM vs generic moves -- 90% of moves on this problem are CAM
                 n_routes = len(set(cs_route))
-                if (n_routes > 1) and (n_routes < depth + 2): 
-                    counter[0] += 1 # non-cam
+                if (n_routes == 1):
+                    counter[0] += (sav_closed > 0) # non-cam
+                elif n_routes == 2:
+                    counter[1] += (sav_closed > 0) # cam
                 else:
-                    counter[1] += 1 # cam
+                    counter[2] += (sav_closed > 0) # ???
                 
-                new_rs  = execute_move(ms.cs[:2 * (depth + 2)], rs, n_nodes, demand)
-                new_pen = compute_penalty(new_rs.pos2node, demand, cap, n_nodes)
-                if (new_pen < pen) or (new_pen == pen and sav_closed > 0):
-                    if (n_routes > 1) and (n_routes < depth + 2):
-                        counter[2] += 1
-                    else:
-                        counter[3] += 1
+    #             # new_rs  = execute_move(ms.cs[:2 * (depth + 2)], rs, n_nodes, demand)
+    #             # new_pen = compute_penalty(new_rs.pos2node, demand, cap, n_nodes)
+    #             # if (new_pen < pen) or (new_pen == pen and sav_closed > 0):
+    #             #     if (n_routes > 1) and (n_routes < depth + 2):
+    #             #         counter[2] += 1
+    #             #     else:
+    #             #         counter[3] += 1
                     
-                    return True, new_rs
+    #             #     return True, new_rs
             
-            # search deeper
-            if depth < max_depth - 2:
-                deeper_improved, deeper_rs = _lk_move(
-                    near      = near, 
-                    dist      = dist, 
-                    rs        = rs, 
-                    ms        = ms, 
-                    sav       = sav_n23_o34, 
-                    n_nodes   = n_nodes, 
-                    depth     = depth + 1, 
-                    max_depth = max_depth, 
-                    dlb       = dlb,
-                    pen       = pen,
-                    demand    = demand,
-                    cap       = cap,
-                    counter   = counter
-                )
+    #         # # search deeper
+    #         # if depth < max_depth - 2:
+    #         #     deeper_improved, deeper_rs = _lk_move(
+    #         #         near      = near, 
+    #         #         dist      = dist, 
+    #         #         rs        = rs, 
+    #         #         ms        = ms, 
+    #         #         sav       = sav_n23_o34, 
+    #         #         n_nodes   = n_nodes, 
+    #         #         depth     = depth + 1, 
+    #         #         max_depth = max_depth, 
+    #         #         dlb       = dlb,
+    #         #         pen       = pen,
+    #         #         demand    = demand,
+    #         #         cap       = cap,
+    #         #         counter   = counter
+    #         #     )
                 
-                if deeper_improved:
-                    return True, deeper_rs
+    #         #     # if deeper_improved:
+    #         #     #     return True, deeper_rs
         
-    return False, rs
+    # return False, rs
 
 # --
 # Execute move
