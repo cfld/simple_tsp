@@ -5,11 +5,12 @@ from scipy.spatial.distance import pdist, squareform
 # --
 # Helpers
 
-def knn_candidates(dist, n_cands):
-    tmp      = dist + (np.eye(dist.shape[0]) * dist.max()) # Can't be near self
-    cand_idx = np.argsort(tmp, axis=-1)
-    cand_idx = cand_idx[:,:n_cands]
-    return cand_idx
+# def knn_candidates(dist, n_cands):
+#     tmp      = dist + (np.eye(dist.shape[0]) * dist.max()) # Can't be near self
+#     cand_idx = np.argsort(tmp, axis=-1)
+#     cand_idx = cand_idx[:,:n_cands]
+#     return cand_idx
+
 
 def init_routes(n_vehicles, n_nodes):
     pos2node   = np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
@@ -37,11 +38,11 @@ def init_routes(n_vehicles, n_nodes):
     return node2route, node2depot, node2suc, node2pre, pos2node
 
 
-def init_dist(n_vehicles, n_nodes):
-    xy = np.random.uniform(0, 100, (n_nodes, 2))
-    xy[:n_vehicles] = xy[0]
-    dist = squareform(pdist(xy)).astype(np.int32)
-    return dist
+# def init_dist(n_vehicles, n_nodes):
+#     xy = np.random.uniform(0, 100, (n_nodes, 2))
+#     xy[:n_vehicles] = xy[0]
+#     dist = squareform(pdist(xy)).astype(np.int32)
+#     return dist
 
 @njit(cache=True)
 def route2cost(n_vehicles, node2suc, dist):
@@ -134,28 +135,29 @@ def execute_move(move, node2pre, node2suc, node2route, node2depot):
         if move[i, 0] == -1: break
         n_moves += 1
     
-    rs = node2route[move[:,0]]
-    
     # Flip routes
     for i in range(n_moves):
-        n0, n1 = move[i]
+        n0, n1, r = move[i]
         flip = node2suc[n0] != n1
         if flip:
-            flip_route(rs[i], node2pre, node2suc, node2depot)
+            flip_route(r, node2pre, node2suc, node2depot)
     
     # Splice routes
     for i in range(n_moves):
         j   = (i + 1) % n_moves
         n01 = move[i, 1]
         n10 = move[j, 0]
-        change_edge(n01, n10, rs[j], node2pre, node2suc, node2route, node2depot)
+        r   = move[j, 2]
+        change_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
 
 
 @njit(cache=True)
 def compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes):
-    move = np.zeros((3, 2), dtype=np.int64) - 1
+    move = np.zeros((3, 3), dtype=np.int64) - 1
     
     for n00 in range(n_nodes):
+        move[0, 0] = n00
+        
         for d0 in [1, -1]:
             r0  = node2route[n00]
             
@@ -163,6 +165,9 @@ def compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes
             
             n00_depot = node2depot[n00]
             n01_depot = node2depot[n01]
+
+            move[0, 1] = n01
+            move[0, 2] = r0
             
             for n10 in near[n01]:
                 for d1 in [1, -1]:
@@ -175,55 +180,132 @@ def compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes
                     n11_depot = node2depot[n11]
                     if n01_depot and n10_depot: continue # no depot-depot
                     
+                    sav0 = dist[n00, n01] + dist[n10, n11] - dist[n01, n10]
+                    
                     # exit now
                     if not (n11_depot and n00_depot):
-                            sav = (
-                                + dist[n00, n01]
-                                + dist[n10, n11]
-                                
-                                - dist[n01, n10]
-                                - dist[n11, n00]
-                            )
-                            
-                            if sav > 0:
-                                move[0, 0] = n00
-                                move[0, 1] = n01
+                            sav_close = sav0 - dist[n11, n00]
+                            if sav_close > 0:
                                 move[1, 0] = n10
                                 move[1, 1] = n11
-                                return move, sav
+                                move[1, 2] = r1
+                                return move, sav_close
                     
-                    for n20 in near[n11]:
-                        for d2 in [1, -1]:
-                            r2 = node2route[n20]
-                            if r2 == r0: continue
-                            if r2 == r1: continue
+                    # for n20 in near[n11]:
+                    #     for d2 in [1, -1]:
+                    #         r2 = node2route[n20]
+                    #         if r2 == r0: continue
+                    #         if r2 == r1: continue
                             
-                            n21 = node2suc[n20] if d2 == 1 else node2pre[n20]
+                    #         n21 = node2suc[n20] if d2 == 1 else node2pre[n20]
                             
-                            n20_depot = node2depot[n20]
-                            n21_depot = node2depot[n21]
-                            if n11_depot and n20_depot: continue # no depot-depot
+                    #         n20_depot = node2depot[n20]
+                    #         n21_depot = node2depot[n21]
+                    #         if n11_depot and n20_depot: continue # no depot-depot
                             
-                            if not (n21_depot and n00_depot):
-                                sav = (
-                                    + dist[n00, n01]
-                                    + dist[n10, n11]
-                                    + dist[n20, n21]
-                                    
-                                    - dist[n01, n10]
-                                    - dist[n11, n20]
-                                    - dist[n21, n00]
-                                )
-                        
-                                if sav > 0:
-                                    move[0, 0] = n00
-                                    move[0, 1] = n01
-                                    move[1, 0] = n10
-                                    move[1, 1] = n11
-                                    move[2, 0] = n20
-                                    move[2, 1] = n21
-                                    return move, sav
+                    #         sav1 = sav0 + dist[n20, n21] - dist[n11, n20]
+                            
+                    #         if not (n21_depot and n00_depot):
+                    #             sav_close = sav1 - dist[n21, n00]
+                    #             if sav_close > 0:
+                    #                 move[0, 0] = n00
+                    #                 move[0, 1] = n01
+                    #                 move[0, 2] = r0
+                    #                 move[1, 0] = n10
+                    #                 move[1, 1] = n11
+                    #                 move[1, 2] = r1
+                    #                 move[2, 0] = n20
+                    #                 move[2, 1] = n21
+                    #                 move[2, 2] = r2
+                    #                 return move, sav_close
     
     return move, 0
 
 
+@njit(cache=True)
+def r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max_depth=2):
+    move = np.zeros((max_depth, 3), dtype=np.int64) - 1
+
+    for n00 in range(n_nodes):
+        r0 = node2route[n00]
+        move[0, 2] = r0
+        move[0, 0] = n00
+        
+        for d0 in [1, -1]:
+            n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
+            move[0, 1] = n01
+            
+            sav_init  = dist[n00, n01]
+            move, sav = _r_compute_move(
+                move, 
+                sav_init, 
+                dist, 
+                near, 
+                node2pre, 
+                node2suc, 
+                node2route, 
+                node2depot, 
+                n_nodes, 
+                depth=1, 
+                max_depth=max_depth
+            )
+            if sav > 0:
+                return move, sav
+    
+    return move, 0
+
+class CostModel:
+    def __init__(self, n):
+        self._i = 0
+        self._n = n
+
+    def __call__(self, expr, caller, callee):
+        ret = self._i < self._n
+        self._i += 1
+        return ret
+
+@njit(cache=True, inline=CostModel(4))
+def _r_compute_move(move, sav, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, depth, max_depth):
+    
+    fin       = move[0, 0]
+    act       = move[depth - 1, 1]
+    act_depot = node2depot[act]
+    fin_depot = node2depot[fin]
+    
+    for nd0 in near[act]:
+        rd = node2route[nd0]
+        
+        if depth >= 1:
+            if rd == move[0, 2]: continue
+        # if depth >= 2: 
+        #     if rd == move[1, 2]: continue
+        # if depth >= 3: 
+        #     if rd == move[2, 2]: continue
+        # if depth >= 4: 
+        #     if rd == move[3, 2]: continue
+        
+        move[depth, 2] = rd
+        move[depth, 0] = nd0
+        
+        sav1 = sav - dist[act, nd0]
+        
+        for d1 in [1, -1]:
+            
+            nd1 = node2suc[nd0] if d1 == 1 else node2pre[nd0]
+            move[depth, 1] = nd1
+            
+            if act_depot and node2depot[nd0]: continue # no depot-depot
+            
+            sav2 = sav1 + dist[nd0, nd1]
+            
+            if not (fin_depot and node2depot[nd1]):
+                sav_close = sav2 - dist[nd1, fin]
+                if sav_close > 0:
+                    return move[:depth + 1], sav_close
+            
+            # if depth < max_depth - 1:
+            #     dmove, dsav = _r_compute_move(move, sav_new, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, depth + 1, max_depth)
+            #     if dsav > 0:
+            #         return dmove, dsav
+
+    return move, 0

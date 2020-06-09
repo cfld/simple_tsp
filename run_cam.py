@@ -9,11 +9,12 @@ import json
 import argparse
 import numpy as np
 from time import time
+from scipy.spatial.distance import squareform, pdist
 
-from simple_tsp.prep import load_problem
+from simple_tsp.prep import load_problem, knn_candidates
 from simple_tsp.helpers import set_seeds
 
-from test import *
+from simple_tsp import cam
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -59,24 +60,68 @@ near = knn_candidates(dist, 10)
 # --
 # Run
 
-res = []
-for _ in range(100):
-    node2route, node2depot, node2suc, node2pre, pos2node = init_routes(n_vehicles, n_nodes)
-    
-    old_cost = route2cost(n_vehicles, node2suc, dist)
-    
+tt = time()
+
+# >>
+tt = time()
+_ = np.random.seed(123)
+for _ in range(50):
+    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
+    old_cost = cam.route2cost(n_vehicles, node2suc, dist)
+
     t = time()
     while True:
-        move, sav = compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
+        move, sav = cam.compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
         if sav == 0: break
         
-        execute_move(move, node2pre, node2suc, node2route, node2depot)
-        new_cost = route2cost(n_vehicles, node2suc, dist)
+        cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
+        new_cost = cam.route2cost(n_vehicles, node2suc, dist)
         assert (old_cost - sav) == new_cost
         old_cost = new_cost
-    
-    print('new_cost', new_cost, time() - t)
-    res.append(new_cost)
 
-print('mean cost', np.mean(new_cost))
-# print(walk_routes(n_vehicles, node2suc))
+    # print('new_cost', new_cost, time() - t)
+
+print(time() - tt)
+print('-' * 50)
+
+tt = time()
+_ = np.random.seed(123)
+for _ in range(50):
+    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
+    old_cost = cam.route2cost(n_vehicles, node2suc, dist)
+
+    t = time()
+    while True:
+        move, sav = cam.r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
+        if sav == 0: break
+        
+        cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
+        new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+        assert (old_cost - sav) == new_cost
+        old_cost = new_cost
+
+    # print('new_cost', new_cost, time() - t)
+
+print(time() - tt)
+# <<
+
+# res = []
+# for _ in range(100):
+#     node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
+    
+#     old_cost = cam.route2cost(n_vehicles, node2suc, dist)
+    
+#     t = time()
+#     while True:
+#         move, sav = cam.r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
+#         if sav == 0: break
+        
+#         cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
+#         new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+#         assert (old_cost - sav) == new_cost
+#         old_cost = new_cost
+    
+#     print('new_cost', new_cost, time() - t)
+#     res.append(new_cost)
+
+# print('mean cost', np.mean(new_cost), time() - tt)
