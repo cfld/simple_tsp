@@ -236,21 +236,64 @@ def r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nod
             move[0, 1] = n01
             
             sav_init  = dist[n00, n01]
-            move, sav = _r_compute_move(
-                move, 
-                sav_init, 
-                dist, 
-                near, 
-                node2pre, 
-                node2suc, 
-                node2route, 
-                node2depot, 
-                n_nodes, 
-                depth=1, 
-                max_depth=max_depth
-            )
-            if sav > 0:
-                return move, sav
+
+            fin       = move[0, 0]
+            act       = move[depth - 1, 1]
+            act_depot = node2depot[act]
+            fin_depot = node2depot[fin]
+            
+            for nd0 in near[act]:
+                rd = node2route[nd0]
+                
+                if depth >= 1:
+                    if rd == move[0, 2]: continue
+                # if depth >= 2: 
+                #     if rd == move[1, 2]: continue
+                # if depth >= 3: 
+                #     if rd == move[2, 2]: continue
+                # if depth >= 4: 
+                #     if rd == move[3, 2]: continue
+                
+                move[depth, 2] = rd
+                move[depth, 0] = nd0
+                
+                sav1 = sav_init - dist[act, nd0]
+                
+                for d1 in [1, -1]:
+                    
+                    nd1 = node2suc[nd0] if d1 == 1 else node2pre[nd0]
+                    move[depth, 1] = nd1
+                    
+                    if act_depot and node2depot[nd0]: continue # no depot-depot
+                    
+                    sav2 = sav1 + dist[nd0, nd1]
+                    
+                    if not (fin_depot and node2depot[nd1]):
+                        sav_close = sav2 - dist[nd1, fin]
+                        if sav_close > 0:
+                            return move[:depth + 1], sav_close
+                    
+                    # if depth < max_depth - 1:
+                    #     dmove, dsav = _r_compute_move(move, sav_new, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, depth + 1, max_depth)
+                    #     if dsav > 0:
+                    #         return dmove, dsav
+
+            return move, 0
+            # move, sav = _r_compute_move(
+            #     move, 
+            #     sav_init, 
+            #     dist, 
+            #     near, 
+            #     node2pre, 
+            #     node2suc, 
+            #     node2route, 
+            #     node2depot, 
+            #     n_nodes, 
+            #     depth=1, 
+            #     max_depth=max_depth
+            # )
+            # if sav > 0:
+            #     return move, sav
     
     return move, 0
 
