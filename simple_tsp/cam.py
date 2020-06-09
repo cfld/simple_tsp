@@ -127,6 +127,37 @@ def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
     node2suc[n1]     = n1_suc
     node2pre[n1_suc] = n1
 
+# >>
+
+@njit(cache=True)
+def partial_load(node, before, node2suc, node2pre, node2depot, node2pen):
+    p = 0
+    while not node2depot[node]:
+        p += node2pen[node]
+        node = node2pre[node] if before else node2suc[node]
+    
+    return p
+
+@njit(cache=True)
+def route_load(depot, node2suc, node2pen):
+    node = node2suc[depot]
+    p = 0
+    while node != depot:
+        p += node2pen[node]
+        node = node2suc[node]
+    
+    return p
+
+@njit(cache=True)
+def penalty_join(a, b, before0, before1, node2suc, node2pre, node2depot, node2pen):
+    p_a = partial_load(a, before0, node2suc, node2pre, node2depot, node2pen)
+    p_b = partial_load(b, before1, node2suc, node2pre, node2depot, node2pen)
+    p   = p_a + p_b
+    return p
+    # if p > cap:
+    #     return p - cap
+
+# <<
 
 @njit(cache=True)
 def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
@@ -148,102 +179,11 @@ def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
         change_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
 
 
-@njit(cache=True)
-def _cam3(move, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes):
-    n00 = move[0, 0]
-    n01 = move[0, 1]
-    r0  = move[0, 2]
-    
-    n00_depot = node2depot[n00]
-    n01_depot = node2depot[n01]
-    
-    for n10 in near[n01]:
-        for d1 in [1, -1]:
-            r1  = node2route[n10]
-            if r0 == r1: continue
-
-            n11 = node2suc[n10] if d1 == 1 else node2pre[n10]
-            
-            n10_depot = node2depot[n10]
-            n11_depot = node2depot[n11]
-            if n01_depot and n10_depot: continue # no depot-depot
-            
-            sav0 = dist[n00, n01] + dist[n10, n11] - dist[n01, n10]
-            
-            # exit now
-            if not (n11_depot and n00_depot):
-                    sav_close = sav0 - dist[n11, n00]
-                    if sav_close > 0:
-                        move[1, 0] = n10
-                        move[1, 1] = n11
-                        move[1, 2] = r1
-                        return move, 1, sav_close
-            
-            for n20 in near[n11]:
-                for d2 in [1, -1]:
-                    r2 = node2route[n20]
-                    if r2 == r0: continue
-                    if r2 == r1: continue
-                    
-                    n21 = node2suc[n20] if d2 == 1 else node2pre[n20]
-                    
-                    n20_depot = node2depot[n20]
-                    n21_depot = node2depot[n21]
-                    if n11_depot and n20_depot: continue # no depot-depot
-                    
-                    sav1 = sav0 + dist[n20, n21] - dist[n11, n20]
-                    
-                    if not (n21_depot and n00_depot):
-                        sav_close = sav1 - dist[n21, n00]
-                        if sav_close > 0:
-                            move[0, 0] = n00
-                            move[0, 1] = n01
-                            move[0, 2] = r0
-                            move[1, 0] = n10
-                            move[1, 1] = n11
-                            move[1, 2] = r1
-                            move[2, 0] = n20
-                            move[2, 1] = n21
-                            move[2, 2] = r2
-                            return move, 2, sav_close
-    
-    return move, -1, 0
 
 @njit(cache=True)
-def do_cam3(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes):
-    move = np.zeros((3, 3), dtype=np.int64) - 1
-    improved = True
-    while improved:
-        improved = False
-        for n00 in range(n_nodes):
-            for d0 in [1, -1]:
-                r0  = node2route[n00]
-                n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
-                
-                move[0, 0] = n00
-                move[0, 1] = n01
-                move[0, 2] = r0
-                
-                move, depth, sav = _cam3(
-                    move, 
-                    dist, 
-                    near, 
-                    node2pre, 
-                    node2suc, 
-                    node2route, 
-                    node2depot, 
-                    n_nodes
-                )
-                
-                if sav > 0:
-                    execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
-                    improved = True
-
-
-
-@njit(cache=True)
-def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max_depth=3):
+def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, max_depth=3):
     move = np.zeros((max_depth, 3), dtype=np.int64) - 1
+    pens = np.zeros(max_depth, dtype=np.int64)
     
     improved = True
     while improved:
@@ -260,8 +200,9 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max
                 move[0, 2] = r0
                 
                 sav_init  = dist[n00, n01]
-                move, depth, sav = _camk(
+                move, depth, sav, pens = _camk(
                     move, 
+                    pens,
                     sav_init, 
                     dist, 
                     near, 
@@ -269,12 +210,18 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max
                     node2suc, 
                     node2route, 
                     node2depot, 
+                    node2pen,
                     n_nodes, 
                     depth=1, 
                     max_depth=max_depth
                 )
                 if sav > 0:
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
+                    # >>
+                    rs = move[:,2]
+                    for i in range(depth + 1):
+                        assert pens[i] == route_load(rs[i], node2suc, node2pen)
+                    # <<
                     improved = True
 
 
@@ -289,12 +236,15 @@ class CostModel:
         return ret
 
 @njit(cache=True, inline=CostModel(4))
-def _camk(move, sav_init, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, depth, max_depth):
+def _camk(move, pens, sav, dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, depth, max_depth):
     
-    fin       = move[0, 0]
-    act       = move[depth - 1, 1]
-    act_depot = node2depot[act]
-    fin_depot = node2depot[fin]
+    fin        = move[0, 0]
+    act        = move[depth - 1, 1]
+    act_depot  = node2depot[act]
+    fin_depot  = node2depot[fin]
+    
+    fin_before = node2suc[fin] == move[0, 1]
+    act_before = node2suc[act] == move[depth - 1, 0]
     
     for nd0 in near[act]:
         rd = node2route[nd0]
@@ -310,7 +260,7 @@ def _camk(move, sav_init, dist, near, node2pre, node2suc, node2route, node2depot
         if depth >= 5: 
             if rd == move[4, 2]: continue
                 
-        sav1 = sav_init - dist[act, nd0]
+        sav1 = sav - dist[act, nd0]
         
         for d1 in [1, -1]:
             
@@ -325,28 +275,146 @@ def _camk(move, sav_init, dist, near, node2pre, node2suc, node2route, node2depot
             move[depth, 0] = nd0
             move[depth, 1] = nd1
             move[depth, 2] = rd
+            pens[depth]    = penalty_join(
+                act,
+                nd0, 
+                act_before,
+                (d1 == 1), 
+                node2suc,
+                node2pre,
+                node2depot,
+                node2pen,
+                # cap
+            )
             
             if not (fin_depot and node2depot[nd1]):
                 sav_close = sav2 - dist[nd1, fin]
+                pens[0]   = penalty_join(
+                    nd1, 
+                    fin, 
+                    not (d1 == 1), 
+                    fin_before,
+                    node2suc,
+                    node2pre,
+                    node2depot,
+                    node2pen,
+                    # cap
+                )
                 if sav_close > 0:
-                    return move, depth, sav_close
+                    return move, depth, sav_close, pens
             
             if depth < max_depth - 1:
-                dmove, ddepth, dsav = _camk(
-                    move, 
-                    sav2, 
+                dmove, ddepth, dsav, dpens = _camk(
+                    move,
+                    pens, 
+                    sav2,
                     dist, 
                     near, 
                     node2pre, 
                     node2suc, 
                     node2route, 
                     node2depot, 
+                    node2pen,
                     n_nodes, 
                     depth + 1, 
                     max_depth
                 )
                 
                 if dsav > 0:
-                    return dmove, ddepth, dsav
+                    return dmove, ddepth, dsav, dpens
 
-    return move, -1, 0
+    return move, -1, 0, pens
+
+# # --
+# # Hardcoded depth
+
+# @njit(cache=True)
+# def _cam3(move, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes):
+#     n00 = move[0, 0]
+#     n01 = move[0, 1]
+#     r0  = move[0, 2]
+    
+#     n00_depot = node2depot[n00]
+#     n01_depot = node2depot[n01]
+    
+#     for n10 in near[n01]:
+#         for d1 in [1, -1]:
+#             r1  = node2route[n10]
+#             if r0 == r1: continue
+
+#             n11 = node2suc[n10] if d1 == 1 else node2pre[n10]
+            
+#             n10_depot = node2depot[n10]
+#             n11_depot = node2depot[n11]
+#             if n01_depot and n10_depot: continue # no depot-depot
+            
+#             sav0 = dist[n00, n01] + dist[n10, n11] - dist[n01, n10]
+            
+#             # exit now
+#             if not (n11_depot and n00_depot):
+#                     sav_close = sav0 - dist[n11, n00]
+#                     if sav_close > 0:
+#                         move[1, 0] = n10
+#                         move[1, 1] = n11
+#                         move[1, 2] = r1
+#                         return move, 1, sav_close
+            
+#             for n20 in near[n11]:
+#                 for d2 in [1, -1]:
+#                     r2 = node2route[n20]
+#                     if r2 == r0: continue
+#                     if r2 == r1: continue
+                    
+#                     n21 = node2suc[n20] if d2 == 1 else node2pre[n20]
+                    
+#                     n20_depot = node2depot[n20]
+#                     n21_depot = node2depot[n21]
+#                     if n11_depot and n20_depot: continue # no depot-depot
+                    
+#                     sav1 = sav0 + dist[n20, n21] - dist[n11, n20]
+                    
+#                     if not (n21_depot and n00_depot):
+#                         sav_close = sav1 - dist[n21, n00]
+#                         if sav_close > 0:
+#                             move[0, 0] = n00
+#                             move[0, 1] = n01
+#                             move[0, 2] = r0
+#                             move[1, 0] = n10
+#                             move[1, 1] = n11
+#                             move[1, 2] = r1
+#                             move[2, 0] = n20
+#                             move[2, 1] = n21
+#                             move[2, 2] = r2
+#                             return move, 2, sav_close
+    
+#     return move, -1, 0
+
+# @njit(cache=True)
+# def do_cam3(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes):
+#     move = np.zeros((3, 3), dtype=np.int64) - 1
+#     improved = True
+#     while improved:
+#         improved = False
+#         for n00 in range(n_nodes):
+#             for d0 in [1, -1]:
+#                 r0  = node2route[n00]
+#                 n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
+                
+#                 move[0, 0] = n00
+#                 move[0, 1] = n01
+#                 move[0, 2] = r0
+                
+#                 move, depth, sav = _cam3(
+#                     move, 
+#                     dist, 
+#                     near, 
+#                     node2pre, 
+#                     node2suc, 
+#                     node2route, 
+#                     node2depot, 
+#                     n_nodes
+#                 )
+                
+#                 if sav > 0:
+#                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
+#                     improved = True

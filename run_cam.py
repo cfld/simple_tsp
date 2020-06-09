@@ -18,7 +18,7 @@ from simple_tsp import cam
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='tmp.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-kick-iters', type=int, default=100)
     parser.add_argument('--max-depth',    type=int, default=3)
@@ -53,6 +53,7 @@ xy = np.row_stack([
     np.repeat(xy[0].reshape(1, -1), n_vehicles, axis=0),
     xy[1:]
 ])
+
 dist = squareform(pdist(xy)).astype(np.int32)
 
 near = knn_candidates(dist, 10)
@@ -80,6 +81,8 @@ tt = time()
 
 print('-' * 50)
 
+node2pen = demand
+
 tt = 0
 _ = np.random.seed(123)
 total = 0
@@ -87,9 +90,10 @@ for _ in range(50):
     node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
     
     t = time()
-    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max_depth=3)
+    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, max_depth=2)
     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
     tt += time() - t
+    total += new_cost
     print('new_cost', new_cost, tt)
 
-print(tt)
+print(tt, total / 50)
