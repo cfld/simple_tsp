@@ -182,6 +182,7 @@ def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
 
 
 
+
 @njit(cache=True)
 def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, n_vehicles, max_depth=3):
     move = np.zeros((max_depth, 3), dtype=np.int64) - 1
@@ -189,8 +190,6 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
     
     old_cost = route2cost(n_vehicles, node2suc, dist)
     old_pen  = all_pen(n_vehicles, node2suc, node2pen, cap)
-    
-    # counter0, counter1 = 0, 0
     
     improved = True
     while improved:
@@ -200,8 +199,6 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                 r0  = node2route[n00]
                 n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
                 
-                # if illegal_break(n00, n01): continue
-                
                 move[0, 0] = n00
                 move[0, 1] = n01
                 move[0, 2] = r0
@@ -210,7 +207,7 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                 pens[0, 1] = partial_load(n01, d0 != 1, node2suc, node2pre, node2depot, node2pen)
                 
                 sav_init  = dist[n00, n01]
-                move, depth, sav = _camk(
+                move, depth, gain, sav = _camk(
                     move,
                     pens,
                     sav_init,
@@ -227,17 +224,11 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                     depth=1, 
                     max_depth=max_depth
                 )
-                if sav > 0:
+                
+                if (gain > 0) or (gain == 0 and sav > 0):
                     improved = True
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
-                    
-                    old_pen = all_pen(n_vehicles, node2suc, node2pen, cap)
-                    # if old_pen == 0:
-                    #     counter0 += 1
-                    # else:
-                    #     counter1 += 1
-    
-    # print(counter0, counter1)
+                    old_pen -= gain
                     
 
 
@@ -300,8 +291,7 @@ def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node
                     sav_close = sav2 - dist[nd1, fin]
                     
                     # Compute gain
-                    p_new = 0
-                    p_old = 0
+                    p_new, p_old = 0, 0
                     for i in range(depth + 1):
                         pp = pens[i, 0] + pens[i, 1]
                         if pp > cap: p_old += pp - cap
@@ -310,13 +300,11 @@ def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node
                         if pp > cap: p_new += pp - cap
                     
                     gain = p_old - p_new
-                    
-                    # if sav_close > 0:
                     if (gain > 0) or (gain == 0 and sav_close > 0):
-                        return move, depth, 1
+                        return move, depth, gain, sav_close
             
             if depth < max_depth - 1:
-                dmove, ddepth, dsav = _camk(
+                dmove, ddepth, dgain, dsav = _camk(
                     move,
                     pens, 
                     sav2,
@@ -330,14 +318,14 @@ def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node
                     node2pen,
                     cap,
                     n_nodes, 
-                    depth + 1, 
-                    max_depth
+                    depth=depth + 1, 
+                    max_depth=max_depth
                 )
                 
-                if dsav > 0:
-                    return dmove, ddepth, dsav
+                if (dgain > 0) or (dgain == 0 and dsav > 0):
+                    return dmove, ddepth, dgain, dsav
 
-    return move, -1, 0
+    return move, -1, -1, -1
 
 # # --
 # # Hardcoded depth

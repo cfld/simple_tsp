@@ -90,6 +90,7 @@ for it in range(1000):
         n_vehicles, 
         max_depth=4
     )
+    tt += time() - t
     
     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
     new_pen  = cam.all_pen(n_vehicles, node2suc, node2pen, cap)
@@ -99,11 +100,5 @@ for it in range(1000):
         best_cost  = new_cost
         best_pen   = new_pen
     
-    tt += time() - t
     total += new_cost
     print(it, new_cost, new_pen, best_cost, best_pen, tt)
-    
-    
-    
-
-# print(tt, total / 50)
