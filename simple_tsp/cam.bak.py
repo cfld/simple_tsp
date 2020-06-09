@@ -1,56 +1,4 @@
-#!/usr/bin/env python
-
-"""
-    main.py
-"""
-
-import os
-import json
-import argparse
-import numpy as np
-from time import time
 from numba import njit
-
-from simple_tsp.prep import load_problem, load_solution, get_distance_matrix
-from simple_tsp.prep import knn_candidates, random_init
-from simple_tsp.helpers import route2cost, set_seeds
-
-from simple_tsp.cam import cam
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
-    parser.add_argument('--n-cands',      type=int, default=10)
-    parser.add_argument('--n-kick-iters', type=int, default=100)
-    parser.add_argument('--max-depth',    type=int, default=3)
-    parser.add_argument('--seed',         type=int, default=123)
-    return parser.parse_args()
-
-args = parse_args()
-
-_ = set_seeds(args.seed)
-
-# --
-# Load problem
-
-prob = load_problem(args.inpath)
-
-n_vehicles = prob['VEHICLES']
-cap        = prob['CAPACITY']
-demand     = np.array(list(prob['DEMAND_SECTION'].values()))
-
-dist = get_distance_matrix(prob)
-near = knn_candidates(dist, args.n_cands)
-
-n_nodes = dist.shape[0]
-
-# --
-# Initialize route
-
-route = random_init(n_nodes, random_state=101)
-
-
-# --
 
 @njit(cache=True)
 def edge_exists(u, v, n):
@@ -62,7 +10,7 @@ def edge_exists(u, v, n):
     )
 
 @njit
-def cam():
+def cam(p00, p01, near, dist, rs, n_nodes, max_depth, dlb, demand, cap, counter):    
     n00  = rs.pos2node[p00]
     n01  = rs.pos2node[p01]
     
@@ -103,5 +51,5 @@ def cam():
                         
             if sav > 0:
                 # execute move
-
-for node in range(n_nodes)
+                
+        
