@@ -181,7 +181,7 @@ def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
 
 
 @njit(cache=True)
-def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, max_depth=3):
+def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, n_vehicles, max_depth=3):
     move = np.zeros((max_depth, 3), dtype=np.int64) - 1
     pens = np.zeros(max_depth, dtype=np.int64)
     
@@ -216,7 +216,11 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_
                     max_depth=max_depth
                 )
                 if sav > 0:
+                    old_cost = cam.route2cost(n_vehicles, node2suc, dist)
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
+                    new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+                    assert new_cost == old_cost - sav
+                    
                     # >>
                     rs = move[:,2]
                     for i in range(depth + 1):
