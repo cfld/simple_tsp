@@ -1,3 +1,6 @@
+import numba
+from typing import NamedTuple
+
 import numpy as np
 from numba import njit
 from scipy.spatial.distance import pdist, squareform
@@ -13,36 +16,6 @@ def knn_candidates(dist, n_cands, n_vehicles):
     cand_idx = np.argsort(dist + mask, axis=-1)
     cand_idx = cand_idx[:,:n_cands]
     return cand_idx
-
-@njit(cache=True)
-def random_pos2node(n_vehicles, n_nodes):
-    pos2node = np.hstack((np.array([0]), 1 + np.random.permutation(n_nodes - 1)))
-    pos2node[pos2node < n_vehicles] = np.arange(n_vehicles) # sort depots
-    return pos2node
-
-@njit(cache=True)
-def init_routes(pos2node, n_vehicles, n_nodes):
-    node2pos   = np.argsort(pos2node)
-    pos2depot  = (pos2node < n_vehicles).astype(np.int32)
-    pos2route  = np.cumsum(pos2depot) - 1
-    node2route = pos2route[node2pos]
-    node2depot = (np.arange(n_nodes) < n_vehicles).astype(np.int32)
-    
-    node2suc = np.zeros(n_nodes, dtype=np.int32) - 1
-    node2pre = np.zeros(n_nodes, dtype=np.int32) - 1
-    for depot in range(n_vehicles):
-        node = depot
-        suc  = pos2node[(node2pos[node] + 1) % n_nodes]
-        while not node2depot[suc]:
-            node2suc[node] = suc
-            node2pre[suc]  = node
-            node = suc
-            suc  = pos2node[(node2pos[node] + 1) % n_nodes]
-        
-        node2suc[node] = depot
-        node2pre[depot] = node
-    
-    return node2route, node2depot, node2suc, node2pre, pos2node
 
 
 @njit(cache=True)
@@ -82,6 +55,95 @@ def walk_routes(n_vehicles, node2suc, verbose=False):
         
     return routes
 
+# --
+# Constraints
+
+@njit(cache=True, inline='always')
+def partial_load(node, before, node2suc, node2pre, node2depot, val):
+    p = 0
+    while not node2depot[node]:
+        p += val[node]
+        node = node2pre[node] if before else node2suc[node]
+    
+    return p
+
+
+@njit(cache=True)
+def route_load(depot, node2suc, node2pen):
+    node = node2suc[depot]
+    p = 0
+    while node != depot:
+        p += node2pen[node]
+        node = node2suc[node]
+    
+    return p
+
+
+@njit(cache=True)
+def all_pen(n_vehicles, node2suc, node2pen, cap):
+    p = 0
+    for r in range(n_vehicles):
+        pp = route_load(r, node2suc, node2pen)
+        if pp > cap:
+            p += pp - cap
+    
+    return p
+
+@njit(cache=True, inline='always')
+def le_additive_gain(acc, depth, maxval):
+    p_new, p_old = 0, 0
+    for i in range(depth + 1):
+        pp = acc[i, 0] + acc[i, 1]
+        if pp > maxval: p_old += pp - maxval
+        
+        pp = acc[i, 1] + acc[(i + 1) % (depth + 1), 0]
+        if pp > maxval: p_new += pp - maxval
+    
+    gain = p_old - p_new
+    return gain
+
+
+@njit(cache=True, inline='never')
+def le_additive_break_edge(n0, n1, forward, depth, acc, val, node2suc, node2pre, node2depot):
+    acc[depth, 0] = partial_load(n0, forward, node2suc, node2pre, node2depot, val)
+    acc[depth, 1] = partial_load(n1, not forward, node2suc, node2pre, node2depot, val)
+    return acc
+
+# --
+# Initialization
+
+@njit(cache=True)
+def random_pos2node(n_vehicles, n_nodes):
+    pos2node = np.hstack((np.array([0]), 1 + np.random.permutation(n_nodes - 1)))
+    pos2node[pos2node < n_vehicles] = np.arange(n_vehicles) # sort depots
+    return pos2node
+
+@njit(cache=True)
+def init_routes(pos2node, n_vehicles, n_nodes):
+    node2pos   = np.argsort(pos2node)
+    pos2depot  = (pos2node < n_vehicles).astype(np.int32)
+    pos2route  = np.cumsum(pos2depot) - 1
+    node2route = pos2route[node2pos]
+    node2depot = (np.arange(n_nodes) < n_vehicles).astype(np.int32)
+    
+    node2suc = np.zeros(n_nodes, dtype=np.int32) - 1
+    node2pre = np.zeros(n_nodes, dtype=np.int32) - 1
+    for depot in range(n_vehicles):
+        node = depot
+        suc  = pos2node[(node2pos[node] + 1) % n_nodes]
+        while not node2depot[suc]:
+            node2suc[node] = suc
+            node2pre[suc]  = node
+            node = suc
+            suc  = pos2node[(node2pos[node] + 1) % n_nodes]
+        
+        node2suc[node] = depot
+        node2pre[depot] = node
+    
+    return node2pre, node2suc, node2route, node2depot, pos2node
+
+# --
+# Modify routes
 
 @njit(cache=True)
 def switch_depot(n, new_depot, node2pre, node2suc, node2route, node2depot, dir=1):
@@ -130,38 +192,6 @@ def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
 
 
 @njit(cache=True)
-def partial_load(node, before, node2suc, node2pre, node2depot, node2pen):
-    p = 0
-    while not node2depot[node]:
-        p += node2pen[node]
-        node = node2pre[node] if before else node2suc[node]
-    
-    return p
-
-
-@njit(cache=True)
-def route_load(depot, node2suc, node2pen):
-    node = node2suc[depot]
-    p = 0
-    while node != depot:
-        p += node2pen[node]
-        node = node2suc[node]
-    
-    return p
-
-
-@njit(cache=True)
-def all_pen(n_vehicles, node2suc, node2pen, cap):
-    p = 0
-    for r in range(n_vehicles):
-        pp = route_load(r, node2suc, node2pen)
-        if pp > cap:
-            p += pp - cap
-    
-    return p
-
-
-@njit(cache=True)
 def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
     n_moves = depth + 1
     
@@ -172,7 +202,7 @@ def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
         if flip:
             flip_route(r, node2pre, node2suc, node2depot)
     
-    # Splice routes
+    # Change edges
     for i in range(n_moves):
         j   = (i + 1) % n_moves
         n01 = move[i, 1]
@@ -180,13 +210,14 @@ def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
         r   = move[j, 2]
         change_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
 
-
-
+# --
+# Run
 
 @njit(cache=True)
 def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, n_vehicles, max_depth=3):
     move = np.zeros((max_depth, 3), dtype=np.int64) - 1
-    pens = np.zeros((max_depth, 2), dtype=np.int64) - 1
+    
+    loads = np.zeros((max_depth, 2), dtype=np.int64) - 1
     
     old_cost = route2cost(n_vehicles, node2suc, dist)
     old_pen  = all_pen(n_vehicles, node2suc, node2pen, cap)
@@ -203,21 +234,23 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                 move[0, 1] = n01
                 move[0, 2] = r0
                 
-                pens[0, 0] = partial_load(n00, d0 == 1, node2suc, node2pre, node2depot, node2pen)
-                pens[0, 1] = partial_load(n01, d0 != 1, node2suc, node2pre, node2depot, node2pen)
+                loads[0, 0] = partial_load(n00, d0 == 1, node2suc, node2pre, node2depot, node2pen)
+                loads[0, 1] = partial_load(n01, d0 != 1, node2suc, node2pre, node2depot, node2pen)
                 
                 sav_init  = dist[n00, n01]
                 move, depth, gain, sav = _camk(
                     move,
-                    pens,
+                    loads,
                     sav_init,
                     old_pen,
                     dist, 
-                    near, 
+                    near,
+                    
                     node2pre, 
                     node2suc, 
                     node2route, 
-                    node2depot, 
+                    node2depot,
+                    
                     node2pen,
                     cap,
                     n_nodes, 
@@ -229,7 +262,6 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                     improved = True
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
                     old_pen -= gain
-                    
 
 
 class CostModel:
@@ -243,15 +275,15 @@ class CostModel:
         return ret
 
 @njit(cache=True, inline=CostModel(4))
-def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, depth, max_depth):
+def _camk(move, loads, sav, pen, dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, depth, max_depth):
     
     fin        = move[0, 0]
     act        = move[depth - 1, 1]
     act_depot  = node2depot[act]
     fin_depot  = node2depot[fin]
     
-    act_pload = pens[depth - 1, 1]
-    fin_pload = pens[0, 0]
+    act_pload = loads[depth - 1, 1]
+    fin_pload = loads[0, 0]
     
     for nd0 in near[act]:
         if act_depot and node2depot[nd0]: continue # no depot-depot connections
@@ -280,33 +312,25 @@ def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node
             move[depth, 0] = nd0
             move[depth, 1] = nd1
             move[depth, 2] = rd
+                        
+            loads = le_additive_break_edge(nd0, nd1, d1 == 1, depth, loads, node2pen, node2suc, node2pre, node2depot)
+            # loads[depth, 0] = partial_load(nd0, d1 == 1, node2suc, node2pre, node2depot, node2pen)
+            # loads[depth, 1] = partial_load(nd1, d1 != 1, node2suc, node2pre, node2depot, node2pen)
             
-            pens[depth, 0] = partial_load(nd0, d1 == 1, node2suc, node2pre, node2depot, node2pen)
-            pens[depth, 1] = partial_load(nd1, d1 != 1, node2suc, node2pre, node2depot, node2pen)
-            
-            if pens[depth, 0] + act_pload - cap > pen: continue
+            if loads[depth, 0] + act_pload - cap > pen: continue
             
             if not (fin_depot and node2depot[nd1]):
-                if pens[depth, 1] + fin_pload - cap <= pen:
+                if loads[depth, 1] + fin_pload - cap <= pen:
                     sav_close = sav2 - dist[nd1, fin]
                     
-                    # Compute gain
-                    p_new, p_old = 0, 0
-                    for i in range(depth + 1):
-                        pp = pens[i, 0] + pens[i, 1]
-                        if pp > cap: p_old += pp - cap
-                        
-                        pp = pens[i, 1] + pens[(i + 1) % (depth + 1), 0]
-                        if pp > cap: p_new += pp - cap
-                    
-                    gain = p_old - p_new
+                    gain = le_additive_gain(loads, depth, maxval=cap)
                     if (gain > 0) or (gain == 0 and sav_close > 0):
                         return move, depth, gain, sav_close
             
             if depth < max_depth - 1:
                 dmove, ddepth, dgain, dsav = _camk(
                     move,
-                    pens, 
+                    loads, 
                     sav2,
                     pen,
                     dist, 

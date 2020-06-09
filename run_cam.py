@@ -20,9 +20,9 @@ from simple_tsp import cam
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
-    parser.add_argument('--n-cands',      type=int, default=10)
-    parser.add_argument('--n-kick-iters', type=int, default=100)
-    parser.add_argument('--max-depth',    type=int, default=3)
+    parser.add_argument('--n-cands',      type=int, default=5)
+    parser.add_argument('--n-iters',      type=int, default=1000)
+    parser.add_argument('--max-depth',    type=int, default=4)
     parser.add_argument('--seed',         type=int, default=123)
     return parser.parse_args()
 
@@ -56,7 +56,7 @@ xy = np.row_stack([
 ])
 
 dist = squareform(pdist(xy)).astype(np.int32)
-near = cam.knn_candidates(dist, n_cands=5, n_vehicles=n_vehicles)
+near = cam.knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
 # --
 # Run
@@ -71,24 +71,24 @@ best_pen  = np.inf
 best_cost = np.inf
 
 best_route = cam.random_pos2node(n_vehicles, n_nodes)
-for it in range(1000):
+for it in range(args.n_iters):
     pos2node = double_bridge_kick(best_route)
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
-    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(pos2node, n_vehicles, n_nodes)
+    node2pre, node2suc, node2route, node2depot, _ = cam.init_routes(pos2node, n_vehicles, n_nodes)
     
     t = time()
     cam.do_camk(
         dist, 
         near, 
-        node2pre, 
-        node2suc, 
-        node2route, 
-        node2depot, 
+        node2pre,
+        node2suc,
+        node2route,
+        node2depot,
         node2pen, 
-        cap, 
+        cap,
         n_nodes, 
         n_vehicles, 
-        max_depth=4
+        max_depth=args.max_depth
     )
     tt += time() - t
     
