@@ -11,8 +11,9 @@ import numpy as np
 from time import time
 from scipy.spatial.distance import squareform, pdist
 
-from simple_tsp.prep import load_problem, knn_candidates
+from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
+from simple_tsp.perturb import double_bridge_kick
 
 from simple_tsp import cam
 
@@ -55,47 +56,54 @@ xy = np.row_stack([
 ])
 
 dist = squareform(pdist(xy)).astype(np.int32)
-near = knn_candidates(dist, 20)
+near = cam.knn_candidates(dist, n_cands=5, n_vehicles=n_vehicles)
 
 # --
 # Run
-
-tt = time()
-
-# >>
-
-# tt = 0
-# _ = np.random.seed(123)
-# total = 0
-# for _ in range(50):
-#     node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
-    
-#     t = time()
-#     cam.do_cam3(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
-#     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
-#     tt += time() - t
-#     print('new_cost', new_cost, tt)
-
-# print(tt)
-
-print('-' * 50)
 
 node2pen = demand
 
 tt = 0
 _ = np.random.seed(123)
 total = 0
-for _ in range(50):
-    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
+
+best_pen  = np.inf
+best_cost = np.inf
+
+best_route = cam.random_pos2node(n_vehicles, n_nodes)
+for it in range(1000):
+    pos2node = double_bridge_kick(best_route)
+    pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
+    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(pos2node, n_vehicles, n_nodes)
     
     t = time()
-    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, n_vehicles, max_depth=4)
+    cam.do_camk(
+        dist, 
+        near, 
+        node2pre, 
+        node2suc, 
+        node2route, 
+        node2depot, 
+        node2pen, 
+        cap, 
+        n_nodes, 
+        n_vehicles, 
+        max_depth=4
+    )
     
     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
     new_pen  = cam.all_pen(n_vehicles, node2suc, node2pen, cap)
     
+    if new_cost < best_cost and new_pen <= best_pen:
+        best_route = np.hstack(cam.walk_routes(n_vehicles, node2suc))
+        best_cost  = new_cost
+        best_pen   = new_pen
+    
     tt += time() - t
     total += new_cost
-    print(new_cost, new_pen, tt)
+    print(it, new_cost, new_pen, best_cost, best_pen, tt)
+    
+    
+    
 
 # print(tt, total / 50)

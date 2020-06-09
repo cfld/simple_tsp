@@ -5,16 +5,23 @@ from scipy.spatial.distance import pdist, squareform
 # --
 # Helpers
 
-# def knn_candidates(dist, n_cands):
-#     tmp      = dist + (np.eye(dist.shape[0]) * dist.max()) # Can't be near self
-#     cand_idx = np.argsort(tmp, axis=-1)
-#     cand_idx = cand_idx[:,:n_cands]
-#     return cand_idx
+def knn_candidates(dist, n_cands, n_vehicles):
+    big_val = 2 * dist.max()
+    mask    = np.eye(dist.shape[0]) * big_val # can't be near self
+    mask[:n_vehicles,:n_vehicles] = big_val   # depots can't be close
+    
+    cand_idx = np.argsort(dist + mask, axis=-1)
+    cand_idx = cand_idx[:,:n_cands]
+    return cand_idx
 
-
-def init_routes(n_vehicles, n_nodes):
-    pos2node   = np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+@njit(cache=True)
+def random_pos2node(n_vehicles, n_nodes):
+    pos2node = np.hstack((np.array([0]), 1 + np.random.permutation(n_nodes - 1)))
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles) # sort depots
+    return pos2node
+
+@njit(cache=True)
+def init_routes(pos2node, n_vehicles, n_nodes):
     node2pos   = np.argsort(pos2node)
     pos2depot  = (pos2node < n_vehicles).astype(np.int32)
     pos2route  = np.cumsum(pos2depot) - 1
@@ -37,12 +44,6 @@ def init_routes(n_vehicles, n_nodes):
     
     return node2route, node2depot, node2suc, node2pre, pos2node
 
-
-# def init_dist(n_vehicles, n_nodes):
-#     xy = np.random.uniform(0, 100, (n_nodes, 2))
-#     xy[:n_vehicles] = xy[0]
-#     dist = squareform(pdist(xy)).astype(np.int32)
-#     return dist
 
 @njit(cache=True)
 def route2cost(n_vehicles, node2suc, dist):
@@ -127,7 +128,6 @@ def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
     node2suc[n1]     = n1_suc
     node2pre[n1_suc] = n1
 
-# >>
 
 @njit(cache=True)
 def partial_load(node, before, node2suc, node2pre, node2depot, node2pen):
@@ -137,6 +137,7 @@ def partial_load(node, before, node2suc, node2pre, node2depot, node2pen):
         node = node2pre[node] if before else node2suc[node]
     
     return p
+
 
 @njit(cache=True)
 def route_load(depot, node2suc, node2pen):
@@ -148,6 +149,7 @@ def route_load(depot, node2suc, node2pen):
     
     return p
 
+
 @njit(cache=True)
 def all_pen(n_vehicles, node2suc, node2pen, cap):
     p = 0
@@ -158,7 +160,6 @@ def all_pen(n_vehicles, node2suc, node2pen, cap):
     
     return p
 
-# <<
 
 @njit(cache=True)
 def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
@@ -187,8 +188,9 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
     pens = np.zeros((max_depth, 2), dtype=np.int64) - 1
     
     old_cost = route2cost(n_vehicles, node2suc, dist)
+    old_pen  = all_pen(n_vehicles, node2suc, node2pen, cap)
     
-    old_p = all_pen(n_vehicles, node2suc, node2pen, cap)
+    # counter0, counter1 = 0, 0
     
     improved = True
     while improved:
@@ -209,9 +211,10 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                 
                 sav_init  = dist[n00, n01]
                 move, depth, sav = _camk(
-                    move, 
+                    move,
                     pens,
-                    sav_init, 
+                    sav_init,
+                    old_pen,
                     dist, 
                     near, 
                     node2pre, 
@@ -225,27 +228,17 @@ def do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, ca
                     max_depth=max_depth
                 )
                 if sav > 0:
+                    improved = True
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
                     
-                    # p = all_pen(n_vehicles, node2suc, node2pen, cap)
-                    # assert old_p - sav == p
-                    # old_p = p
+                    old_pen = all_pen(n_vehicles, node2suc, node2pen, cap)
+                    # if old_pen == 0:
+                    #     counter0 += 1
+                    # else:
+                    #     counter1 += 1
+    
+    # print(counter0, counter1)
                     
-                    
-                    # # Check savings
-                    # new_cost = route2cost(n_vehicles, node2suc, dist)
-                    # assert new_cost == old_cost - sav
-                    # old_cost = new_cost
-                    
-                    # # Check penalties
-                    # rs = move[:,2]
-                    # z = 0
-                    # for i in range(depth + 1):
-                    #     z += route_load(rs[i], node2suc, node2pen)
-                    
-                    # print(pens[:depth + 1].sum(), z)
-                    
-                    improved = True
 
 
 class CostModel:
@@ -259,17 +252,19 @@ class CostModel:
         return ret
 
 @njit(cache=True, inline=CostModel(4))
-def _camk(move, pens, sav, dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, depth, max_depth):
+def _camk(move, pens, sav, pen, dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, depth, max_depth):
     
     fin        = move[0, 0]
     act        = move[depth - 1, 1]
     act_depot  = node2depot[act]
     fin_depot  = node2depot[fin]
     
-    fin_before = node2suc[fin] == move[0, 1]
-    act_before = node2suc[act] == move[depth - 1, 0]
+    act_pload = pens[depth - 1, 1]
+    fin_pload = pens[0, 0]
     
     for nd0 in near[act]:
+        if act_depot and node2depot[nd0]: continue # no depot-depot connections
+        
         rd = node2route[nd0]
         
         if depth >= 1:
@@ -287,11 +282,7 @@ def _camk(move, pens, sav, dist, near, node2pre, node2suc, node2route, node2depo
         
         for d1 in [1, -1]:
             
-            nd1 = node2suc[nd0] if d1 == 1 else node2pre[nd0]
-            
-            if act_depot and node2depot[nd0]: continue # no depot-depot connections
-            # if illegal_join(act, nd0): continue
-            # if illegal_break(nd0, nd1): continue
+            nd1  = node2suc[nd0] if d1 == 1 else node2pre[nd0]
             
             sav2 = sav1 + dist[nd0, nd1]
 
@@ -302,30 +293,34 @@ def _camk(move, pens, sav, dist, near, node2pre, node2suc, node2route, node2depo
             pens[depth, 0] = partial_load(nd0, d1 == 1, node2suc, node2pre, node2depot, node2pen)
             pens[depth, 1] = partial_load(nd1, d1 != 1, node2suc, node2pre, node2depot, node2pen)
             
+            if pens[depth, 0] + act_pload - cap > pen: continue
+            
             if not (fin_depot and node2depot[nd1]):
-                sav_close = sav2 - dist[nd1, fin]
-                
-                # Compute gain
-                p_new = 0
-                p_old = 0
-                for i in range(depth + 1):
-                    pp = pens[i, 0] + pens[i, 1]
-                    if pp > cap: p_old += pp - cap
+                if pens[depth, 1] + fin_pload - cap <= pen:
+                    sav_close = sav2 - dist[nd1, fin]
                     
-                    pp = pens[i, 1] + pens[(i + 1) % (depth + 1), 0]
-                    if pp > cap: p_new += pp - cap
-                
-                gain = p_old - p_new
-                
-                # if sav_close > 0:
-                if (gain > 0) or (gain == 0 and sav_close > 0):
-                    return move, depth, 1
+                    # Compute gain
+                    p_new = 0
+                    p_old = 0
+                    for i in range(depth + 1):
+                        pp = pens[i, 0] + pens[i, 1]
+                        if pp > cap: p_old += pp - cap
+                        
+                        pp = pens[i, 1] + pens[(i + 1) % (depth + 1), 0]
+                        if pp > cap: p_new += pp - cap
+                    
+                    gain = p_old - p_new
+                    
+                    # if sav_close > 0:
+                    if (gain > 0) or (gain == 0 and sav_close > 0):
+                        return move, depth, 1
             
             if depth < max_depth - 1:
                 dmove, ddepth, dsav = _camk(
                     move,
                     pens, 
                     sav2,
+                    pen,
                     dist, 
                     near, 
                     node2pre, 
