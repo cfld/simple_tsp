@@ -63,65 +63,33 @@ near = knn_candidates(dist, 10)
 tt = time()
 
 # >>
-tt = time()
-_ = np.random.seed(123)
-for _ in range(50):
-    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
-    old_cost = cam.route2cost(n_vehicles, node2suc, dist)
 
-    t = time()
-    while True:
-        move, sav = cam.compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
-        if sav == 0: break
-        
-        cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
-        new_cost = cam.route2cost(n_vehicles, node2suc, dist)
-        assert (old_cost - sav) == new_cost
-        old_cost = new_cost
-
-    # print('new_cost', new_cost, time() - t)
-
-print(time() - tt)
-print('-' * 50)
-
-tt = time()
-_ = np.random.seed(123)
-for _ in range(50):
-    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
-    old_cost = cam.route2cost(n_vehicles, node2suc, dist)
-
-    t = time()
-    while True:
-        move, sav = cam.r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
-        if sav == 0: break
-        
-        cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
-        new_cost = cam.route2cost(n_vehicles, node2suc, dist)
-        assert (old_cost - sav) == new_cost
-        old_cost = new_cost
-
-    # print('new_cost', new_cost, time() - t)
-
-print(time() - tt)
-# <<
-
-# res = []
-# for _ in range(100):
+# tt = 0
+# _ = np.random.seed(123)
+# total = 0
+# for _ in range(50):
 #     node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
     
-#     old_cost = cam.route2cost(n_vehicles, node2suc, dist)
-    
 #     t = time()
-#     while True:
-#         move, sav = cam.r_compute_move(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
-#         if sav == 0: break
-        
-#         cam.execute_move(move, node2pre, node2suc, node2route, node2depot)
-#         new_cost = cam.route2cost(n_vehicles, node2suc, dist)
-#         assert (old_cost - sav) == new_cost
-#         old_cost = new_cost
-    
-#     print('new_cost', new_cost, time() - t)
-#     res.append(new_cost)
+#     cam.do_cam3(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes)
+#     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+#     tt += time() - t
+#     print('new_cost', new_cost, tt)
 
-# print('mean cost', np.mean(new_cost), time() - tt)
+# print(tt)
+
+print('-' * 50)
+
+tt = 0
+_ = np.random.seed(123)
+total = 0
+for _ in range(50):
+    node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
+    
+    t = time()
+    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, max_depth=3)
+    new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+    tt += time() - t
+    print('new_cost', new_cost, tt)
+
+print(tt)
