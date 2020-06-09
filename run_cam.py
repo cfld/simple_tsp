@@ -55,8 +55,7 @@ xy = np.row_stack([
 ])
 
 dist = squareform(pdist(xy)).astype(np.int32)
-
-near = knn_candidates(dist, 10)
+near = knn_candidates(dist, 20)
 
 # --
 # Run
@@ -90,10 +89,13 @@ for _ in range(50):
     node2route, node2depot, node2suc, node2pre, pos2node = cam.init_routes(n_vehicles, n_nodes)
     
     t = time()
-    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, n_nodes, n_vehicles, max_depth=2)
+    cam.do_camk(dist, near, node2pre, node2suc, node2route, node2depot, node2pen, cap, n_nodes, n_vehicles, max_depth=4)
+    
     new_cost = cam.route2cost(n_vehicles, node2suc, dist)
+    new_pen  = cam.all_pen(n_vehicles, node2suc, node2pen, cap)
+    
     tt += time() - t
     total += new_cost
-    print('new_cost', new_cost, tt)
+    print(new_cost, new_pen, tt)
 
-print(tt, total / 50)
+# print(tt, total / 50)
