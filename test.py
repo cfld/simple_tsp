@@ -6,6 +6,7 @@ from scipy.spatial.distance import pdist, squareform
 
 def init_routes(n_vehicles, n_nodes):
     pos2node   = np.hstack([[0], 1 + np.random.permutation(n_nodes - 1)])
+    pos2node[pos2node < n_vehicles] = np.arange(n_vehicles) # sort depots
     node2pos   = np.argsort(pos2node)
     pos2depot  = (pos2node < n_vehicles).astype(np.int32)
     pos2route  = np.cumsum(pos2depot) - 1
@@ -36,31 +37,39 @@ def init_dist(n_vehicles, n_nodes):
 
 def route2cost():
     cost = 0
+    counter = 0
     for depot in range(n_vehicles):
         n = depot
         while True:
-            print(n)
             cost += dist[n, node2suc[n]]
             n = node2suc[n]
             if n == depot: break
-        
-        print('-')
+            counter += 1
+            if counter > node2suc.shape[0]: raise Exception('!! loop detected')
     
     return cost
 
-def walk_routes(node2suc):
+def walk_routes(verbose=True):
+    if verbose: print('-' * 50)
     routes = []
+    counter = 0
     for depot in range(n_vehicles):
         route = []
         node = depot
         while True:
+            if verbose: print(node)
+            
             route.append(node)
             node = node2suc[node]
             if node == depot: break
+            counter += 1
+            if counter > len(node2suc) + 2: raise Exception('!! loop detected')
         
+        if verbose: print('-' * 10)
         routes.append(route)
-    
+        
     return routes
+
 
 def switch_depot(n, new_depot, dir=1):
     if node2depot[n]: return
@@ -96,6 +105,7 @@ def flip_route(depot):
 
         n = nn
 
+
 def execute_move(n00, n01, n10, n11):
     seg00, seg01, seg10, seg11 = [], [], [], []
     
@@ -113,33 +123,15 @@ def execute_move(n00, n01, n10, n11):
     node2suc[n10] = n01 if not node2depot[n01] else r1
     node2pre[n01 if not node2depot[n01] else r1] = n10
 
-_ = np.random.seed(123)
 
-n_vehicles = 2
-n_nodes    = 16
-
-node2route, node2depot, node2suc, node2pre = init_routes(n_vehicles, n_nodes)
-dist = init_dist(n_vehicles, n_nodes)
-
-print(walk_routes(node2suc))
-
-execute_move(11, 8, 9, 12)
-print(walk_routes(node2suc))
-
-raise Exception()
-# <<
-
-
-
-
-def _move(cost):
+def compute_move():
     for n00 in range(n_nodes):
-        for d0 in [-1]:
+        for d0 in [1, -1]:
             n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
             r0  = node2route[n00]
             
             for n10 in range(n_nodes):
-                for d1 in [1]:
+                for d1 in [1, -1]:
                     n11 = node2suc[n10] if d1 == 1 else node2pre[n10]
                     r1  = node2route[n10]
                     
@@ -155,85 +147,28 @@ def _move(cost):
                     )
                     
                     if sav > 0:
-                        print('est new_cost', cost - sav)
-                        print(n00, n01, n10, n11)
-                        
-                        if d0 == 1 and d1 == 1: # forward-forward
-                            raise Exception()
-                            # node2suc[n00] = n11 ; node2pre[n11] = n00
-                            # node2suc[n10] = n01 ; node2pre[n01] = n10
-                            
-                            # n = n11
-                            # while True:
-                            #     node2route[n] = r0
-                            #     if node2depot[node2suc[n]]:
-                            #         node2suc[n] = r0
-                            #         break
-                                
-                            #     n = node2suc[n]
-                            
-                            # n = n01
-                            # while True:
-                            #     node2route[n] = r1
-                            #     if node2depot[node2suc[n]]:
-                            #         node2suc[n] = r1
-                            #         break
-                                
-                            #     n = node2suc[n]
-                        
-                        elif d0 == -1 and d1 == 1: # backward-forward
-                            node2suc[n00] = n11 ; node2pre[n11] = n00
-                            
-                            n = n11
-                            while True:
-                                print('n11 walk', n)
-                                node2route[n] = r0
-                                if node2depot[node2suc[n]]:
-                                    node2suc[n] = r0
-                                    break
-                                
-                                n = node2suc[n]
-                            
-                            n = n00
-                            while True:
-                                print('n00 walk', n, node2suc[n], node2pre[n])
-                                
-                                if node2depot[node2pre[n]]:
-                                    print('-')
-                                    break
-                               
-                                tmp         = node2suc[n]
-                                node2suc[n] = node2pre[n]
-                                node2pre[n] = tmp
-                                
-                                n = node2suc[n]
+                        return (n00, n01, n10, n11), sav
+    
+    return None, 0
 
-                            node2suc[n10] = n01 ; node2pre[n01] = n10
-                            
-                            n = n01
-                            while True:
-                                print('n01 walk', n, node2suc[n], node2pre[n])
-                                node2route[n] = r1
-                                if node2depot[node2pre[n]]:
-                                    node2pre[n] = r1
-                                    break
-                                
-                                n = node2pre[n]
-                            
-                            raise Exception()
-                        
-                        return
+# --
+# Run
 
-print_route()
-_move(0)
-print_route()
-# _move(0)
+_ = np.random.seed(123)
 
-# for _ in range(2):
-#     # cost = route2cost()
-#     # print('pre cost', cost)
-#     _move(0)
-#     # print('act new_cost', route2cost())
-#     # print('-' * 50)
+n_vehicles = 10
+n_nodes    = 100
 
-# print_route()
+node2route, node2depot, node2suc, node2pre = init_routes(n_vehicles, n_nodes)
+
+dist = init_dist(n_vehicles, n_nodes)
+
+it = 0
+while True:
+    old_cost  = route2cost()
+    move, sav = compute_move()
+    if sav == 0: break
+    execute_move(*move)
+    new_cost = route2cost()
+    print(it, sav, old_cost - sav, new_cost)
+    it += 1
