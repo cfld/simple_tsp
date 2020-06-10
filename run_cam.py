@@ -15,13 +15,13 @@ from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
 from simple_tsp.perturb import double_bridge_kick
 
-
-from simple_tsp.cam_helpers import knn_candidates, route2cost, walk_routes
+from simple_tsp.cam import do_camk
+from simple_tsp.cam_helpers import knn_candidates, routes2cost, walk_routes
 from simple_tsp.cam_init import random_pos2node, init_routes
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n125-k30.vrp')
     parser.add_argument('--n-cands',      type=int, default=5)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
@@ -29,7 +29,6 @@ def parse_args():
     return parser.parse_args()
 
 args = parse_args()
-
 _ = set_seeds(args.seed)
 
 # --
@@ -63,7 +62,8 @@ near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 # --
 # Run
 
-node2pen = demand
+cap__data   = demand
+cap__maxval = cap
 
 tt = 0
 _ = np.random.seed(123)
@@ -72,28 +72,43 @@ total = 0
 best_pen  = np.inf
 best_cost = np.inf
 
+# Init
 best_route = random_pos2node(n_vehicles, n_nodes)
+
 for it in range(args.n_iters):
+    
+    # Perturb
     pos2node = double_bridge_kick(best_route)
+    pos2node = double_bridge_kick(pos2node)
+    pos2node = double_bridge_kick(pos2node)
+    
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
     
+    # Optimize
     t = time()
-    new_cost, new_pen = cam.do_camk(
-        dist, 
+    new_cost, new_pen = do_camk(
+        dist,
         near, 
+        
         node2pre,
         node2suc,
         node2route,
-        node2depot,
-        node2pen, 
-        cap,
+        node2depot, 
+        
         n_nodes, 
         n_vehicles, 
-        max_depth=args.max_depth
+        
+        max_depth=args.max_depth,
+        
+        # @CONSTRAINT -- params
+        cap__data=cap__data,
+        cap__maxval=cap__maxval, 
+        # <<
     )
     tt += time() - t
     
+    # Record
     if new_cost < best_cost and new_pen <= best_pen:
         best_route = np.hstack(walk_routes(n_vehicles, node2suc))
         best_cost  = new_cost

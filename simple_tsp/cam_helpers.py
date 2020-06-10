@@ -12,7 +12,7 @@ def knn_candidates(dist, n_cands, n_vehicles):
 
 
 @njit(cache=True)
-def route2cost(n_vehicles, node2suc, dist):
+def routes2cost(dist, node2suc, n_vehicles):
     cost = 0
     counter = 0
     for depot in range(n_vehicles):
