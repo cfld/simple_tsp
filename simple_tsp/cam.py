@@ -92,7 +92,7 @@ def reverse_move(move, depth, node2pre, node2suc, node2route, node2depot):
 # --
 # Run
 
-@njit(cache=True)
+# @njit(cache=True)
 def do_camk(
         dist,
         near, 
