@@ -40,10 +40,10 @@ _ = set_seeds(args.seed)
 prob = load_problem(args.inpath)
 
 # >>
-best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
+# best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
 # <<
 
-n_vehicles = 203 # prob['VEHICLES']    
+n_vehicles = prob['VEHICLES']    
 cap        = prob['CAPACITY']
 
 demand = np.array(list(prob['DEMAND_SECTION'].values()))
@@ -76,21 +76,23 @@ tt = 0
 _ = np.random.seed(123)
 total = 0
 
-# best_pen  = np.inf
-# best_cost = np.inf
 
 # Init
-# best_route = random_pos2node(n_vehicles, n_nodes)
-pos2node = best_route.copy()
+# >>
+best_route = random_pos2node(n_vehicles, n_nodes)
+best_pen  = np.inf
+best_cost = np.inf
+# --
+# from simple_tsp.cam_helpers import routes2cost
+# node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
+# best_cost = routes2cost(dist, node2suc, n_vehicles)
+# best_pen  = 0
+# <<
 
-from simple_tsp.cam_helpers import routes2cost
-node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
-best_cost = routes2cost(dist, node2suc, n_vehicles)
-best_pen  = 0
-
+pos2node   = best_route.copy()
 print(best_cost, best_pen)
 
-for it in range(1):
+for it in range(1000):
     
     # Perturb
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
@@ -106,8 +108,8 @@ for it in range(1):
         node2route,
         node2depot, 
         
-        n_nodes, 
-        n_vehicles, 
+        n_nodes=n_nodes, 
+        n_vehicles=n_vehicles, 
         
         max_depth=args.max_depth,
         
@@ -117,7 +119,6 @@ for it in range(1):
         # <<
     )
     tt += time() - t
-    print('done move')
     
     # Record
     if (new_pen, new_cost) < (best_pen, best_cost):

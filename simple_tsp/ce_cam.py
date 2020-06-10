@@ -75,7 +75,7 @@ def do_camce(
                     cap__data,
                     cap__maxval,
                 )
-                if (gain > 0) or (gain == 0 and sav > 0):
+                if (gain > 0) or (gain == 0 and sav > 1e-5):
                     improved = True
                     cost -= sav
                     pen  -= gain

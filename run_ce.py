@@ -5,6 +5,8 @@
     
     # !! Should run LK on individual routes
     # !! Perturbations should target routes w/ penalties
+    # !! Perturb with penalties, double bridge kick is too large, I think
+        - How are penalties implemented in RoutingSolver?
 """
 
 import os
@@ -16,9 +18,9 @@ from scipy.spatial.distance import squareform, pdist
 
 from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
-from simple_tsp.perturb import double_bridge_kick
+from simple_tsp.perturb import double_bridge_kick, double_bridge_kick_targeted
 
-# from simple_tsp.cam import do_camk
+from simple_tsp.cam import do_camk
 from simple_tsp.ce_cam import do_camce
 from simple_tsp.cam_helpers import knn_candidates, routes2cost, walk_routes
 from simple_tsp.cam_init import random_pos2node, init_routes
@@ -26,7 +28,7 @@ from simple_tsp.cam_init import random_pos2node, init_routes
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
-    parser.add_argument('--n-cands',      type=int, default=5)
+    parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
     parser.add_argument('--seed',         type=int, default=123)
@@ -42,9 +44,10 @@ prob = load_problem(args.inpath)
 
 # >>
 best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
+n_vehicles = 203
+# --
+# n_vehicles = prob['VEHICLES']    
 # <<
-
-n_vehicles = 203 # prob['VEHICLES']    
 cap        = prob['CAPACITY']
 
 demand = np.array(list(prob['DEMAND_SECTION'].values()))
@@ -77,27 +80,50 @@ tt = 0
 _ = np.random.seed(123)
 total = 0
 
+# Init
+# <<
+# best_route = random_pos2node(n_vehicles, n_nodes)
 # best_pen  = np.inf
 # best_cost = np.inf
-
-# Init
-# best_route = random_pos2node(n_vehicles, n_nodes)
-pos2node = best_route.copy()
-
+# pos2node = best_route.copy()
+# --
 from simple_tsp.cam_helpers import routes2cost
+pos2node = best_route.copy()
 node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
 best_cost = routes2cost(dist, node2suc, n_vehicles)
 best_pen  = 0
+# >>
 
 print(best_cost, best_pen)
 
-for it in range(1):
+for it in range(1000):
     
     # Perturb
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
     
     # Optimize
     t = time()
+    
+    new_cost, new_pen = do_camk(
+        dist,
+        near, 
+        
+        node2pre,
+        node2suc,
+        node2route,
+        node2depot, 
+        
+        n_nodes, 
+        n_vehicles, 
+        
+        max_depth=args.max_depth,
+        
+        # @CONSTRAINT -- params
+        cap__data=cap__data,
+        cap__maxval=cap__maxval, 
+        # <<
+    )
+    
     new_cost, new_pen = do_camce(
         dist,
         near, 
@@ -110,15 +136,13 @@ for it in range(1):
         n_nodes, 
         n_vehicles, 
         
-        # max_depth=args.max_depth,
-        
         # @CONSTRAINT -- params
         cap__data=cap__data,
         cap__maxval=cap__maxval, 
         # <<
     )
+    
     tt += time() - t
-    print('done move')
     
     # Record
     if (new_pen, new_cost) < (best_pen, best_cost):
@@ -131,8 +155,21 @@ for it in range(1):
     print(it, new_cost, new_pen, best_cost, best_pen, tt)
 
     # Perturb
-    pos2node = double_bridge_kick(best_route)
+    # <<
+    # pos2node = double_bridge_kick(best_route)
+    # --
+    pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
+    # --
+    # from simple_tsp.cam_constraints import cap__route2pen
+    # from simple_tsp.perturb import double_bridge_kick_weighted
+    # weights = np.array([cap__route2pen(i, node2suc, cap__data, cap__maxval) for i in range(n_vehicles)])
+    # weights = weights[node2route]
+    # weights = weights / weights.sum()
+    # pos2node = double_bridge_kick_weighted(best_route, weights)
+    # >>
+    
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
+    
 
 
 print(best_route)
