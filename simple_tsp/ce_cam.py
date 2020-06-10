@@ -122,7 +122,7 @@ def _find_move0(
                 - dist[n01, n10]
             )
             
-            if sav0 < 0: continue # improving moves -- optional
+            # if sav0 < 0: continue # improving moves -- optional
             
             move0[1] = (n10, n11, r1, np.int64(not forward1))
             
