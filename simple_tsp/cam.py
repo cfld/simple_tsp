@@ -92,7 +92,7 @@ def reverse_move(move, depth, node2pre, node2suc, node2route, node2depot):
 # --
 # Run
 
-# @njit(cache=True)
+@njit(cache=True)
 def do_camk(
         dist,
         near, 
@@ -171,10 +171,10 @@ def do_camk(
                     improved = True
                     pen_init  -= gain
                     cost_init -= sav
-                    print(pen_init, cost_init)
+                    # print(pen_init, cost_init)
                     
-                    p = cap__routes2pen(n_vehicles, node2suc, cap__data, cap__maxval)
-                    assert p == pen_init
+                    # p = cap__routes2pen(n_vehicles, node2suc, cap__data, cap__maxval)
+                    # assert p == pen_init
     
     return cost_init, pen_init
     
@@ -258,6 +258,8 @@ def _cam_ce(
             if (fin_depot and node2depot[nd1]): continue
             sav_close = sav_add_drop - dist[nd1, fin]
             
+            if sav_close < 0: continue # optional -- but big speedup
+            
             gain = cap__compute_gain(cap__acc, depth, cap__maxval)
             
             # execute move
@@ -314,6 +316,8 @@ def _cam_ce(
                             cap__acc2[1, 0] += cap__data[n1]
                             cap__acc2[1, 1] -= cap__data[n1]
                             if n1 == r1: break
+                            
+                            if cap__acc2[0, 1] + cap__acc2[1, 0] > cap__maxval: break # additive pruning
                         
                         n0 = n0_next
                         cap__acc2[0, 0] += cap__data[n0]
