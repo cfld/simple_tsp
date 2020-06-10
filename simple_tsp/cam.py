@@ -83,7 +83,7 @@ def reverse_move(move, depth, node2pre, node2suc, node2route, node2depot):
     # REVERSE Flip routes
     for i in range(n_moves):
         n0, n1, r, flip = move[i]
-        if not flip:
+        if flip == 0:
             change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
         else:
             change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
