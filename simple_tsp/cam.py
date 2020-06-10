@@ -103,7 +103,7 @@ def le_additive_gain(acc, depth, maxval):
     return gain
 
 
-@njit(cache=True, inline='never')
+@njit(cache=True, inline='always')
 def le_additive_break_edge(n0, n1, forward, depth, acc, val, node2suc, node2pre, node2depot):
     acc[depth, 0] = partial_load(n0, forward, node2suc, node2pre, node2depot, val)
     acc[depth, 1] = partial_load(n1, not forward, node2suc, node2pre, node2depot, val)

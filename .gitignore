@@ -1,3 +1,5 @@
+*.tsp
+*.vrp
 *pyc
 simple_tsp.egg-info/
 *__pycache__*
