@@ -112,7 +112,7 @@ def do_camk(
     improved = True
     while improved:
         improved = False
-        for n00 in range(n_nodes):
+        for n00 in np.random.permutation(n_nodes):
             for d0 in [1, -1]:
                 r0  = node2route[n00]
                 n01 = node2suc[n00] if d0 == 1 else node2pre[n00]
@@ -156,6 +156,7 @@ def do_camk(
                     execute_move(move, depth, node2pre, node2suc, node2route, node2depot)
                     pen_init  -= gain
                     cost_init -= sav
+                    print(sav, gain)
     
     return cost_init, pen_init
     
@@ -279,3 +280,62 @@ def _camk(
                     return _move, _depth, _gain, _sav
 
     return move, -1, -1, -1
+
+
+# @njit(cache=True, inline=CostModel(4))
+# def _camk(
+#         move,
+#         dist, near,
+#         node2pre, node2suc, node2route, node2depot,
+
+#         sav_init,
+#         pen_init,
+#         n_nodes,
+#         depth,
+#         max_depth,
+
+#         # >> @CONSTRAINT -- params
+#         cap__acc,
+#         cap__data,
+#         cap__maxval,
+#         # <<
+#     ):
+    
+#     fin        = move[0, 0]
+#     act        = move[0, 1]
+#     act_depot  = node2depot[act]
+#     fin_depot  = node2depot[fin]
+    
+#     act_pload = cap__acc[0, 1]
+#     fin_pload = cap__acc[0, 0]
+    
+#     for nd0 in near[act]:
+#         if act_depot and node2depot[nd0]: continue # no depot-depot connections
+        
+#         rd = node2route[nd0]
+        
+#         if depth >= 1:
+#             if rd == move[0, 2]: continue
+        
+#         sav_add = sav_init - dist[act, nd0]
+        
+#         for d1 in [1, -1]:
+            
+#             nd1 = node2suc[nd0] if d1 == 1 else node2pre[nd0]
+            
+#             sav_add_drop = sav_add + dist[nd0, nd1]
+
+#             move[1, 0] = nd0
+#             move[1, 1] = nd1
+#             move[1, 2] = rd
+            
+#             # execute_move
+            
+#             # search routes for another CAM that gets better gain
+#             # if found, execute
+#             # else, restore
+            
+            
+            
+
+#     return move, -1, -1, -1
