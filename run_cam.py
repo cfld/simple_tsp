@@ -117,10 +117,12 @@ for it in range(1):
         # <<
     )
     tt += time() - t
+    print('done move')
     
     # Record
     if (new_pen, new_cost) < (best_pen, best_cost):
         best_route = np.hstack(walk_routes(n_vehicles, node2suc))
+        assert len(best_route) == n_nodes
         best_cost  = new_cost
         best_pen   = new_pen
     

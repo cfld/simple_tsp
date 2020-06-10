@@ -28,6 +28,8 @@ def routes2cost(dist, node2suc, n_vehicles):
 
 
 def walk_routes(n_vehicles, node2suc, verbose=False):
+    n_nodes = node2suc.shape[0]
+    
     if verbose: print('-' * 50)
     routes = []
     counter = 0
@@ -38,12 +40,18 @@ def walk_routes(n_vehicles, node2suc, verbose=False):
             if verbose: print(node)
             
             route.append(node)
+            counter += 1
+            
             node = node2suc[node]
             if node == depot: break
-            counter += 1
+            
             if counter > len(node2suc) + 2: raise Exception('!! loop detected')
         
         if verbose: print('-' * 10)
         routes.append(route)
+    
+    # print('walk_routes', counter, n_nodes)
+    if counter != n_nodes: 
+        raise Exception('!! invalid route')
         
     return routes
