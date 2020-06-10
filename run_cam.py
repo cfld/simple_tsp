@@ -15,7 +15,9 @@ from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
 from simple_tsp.perturb import double_bridge_kick
 
-from simple_tsp import cam
+
+from simple_tsp.cam_helpers import knn_candidates, route2cost, walk_routes
+from simple_tsp.cam_init import random_pos2node, init_routes
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -56,7 +58,7 @@ xy = np.row_stack([
 ])
 
 dist = squareform(pdist(xy)).astype(np.int32)
-near = cam.knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
+near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
 # --
 # Run
@@ -70,14 +72,14 @@ total = 0
 best_pen  = np.inf
 best_cost = np.inf
 
-best_route = cam.random_pos2node(n_vehicles, n_nodes)
+best_route = random_pos2node(n_vehicles, n_nodes)
 for it in range(args.n_iters):
     pos2node = double_bridge_kick(best_route)
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
-    node2pre, node2suc, node2route, node2depot, _ = cam.init_routes(pos2node, n_vehicles, n_nodes)
+    node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
     
     t = time()
-    cam.do_camk(
+    new_cost, new_pen = cam.do_camk(
         dist, 
         near, 
         node2pre,
@@ -92,11 +94,8 @@ for it in range(args.n_iters):
     )
     tt += time() - t
     
-    new_cost = cam.route2cost(n_vehicles, node2suc, dist)
-    new_pen  = cam.all_pen(n_vehicles, node2suc, node2pen, cap)
-    
     if new_cost < best_cost and new_pen <= best_pen:
-        best_route = np.hstack(cam.walk_routes(n_vehicles, node2suc))
+        best_route = np.hstack(walk_routes(n_vehicles, node2suc))
         best_cost  = new_cost
         best_pen   = new_pen
     
