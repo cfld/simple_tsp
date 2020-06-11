@@ -158,32 +158,28 @@ for it in range(1):
         # --
         # CE
         
-        print('start ce')
-        new_cost, new_pen, changed = do_ce(**prob)
-        print('done ce')
+        _, _, changed = do_ce(**prob)
+        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+        print(inner_iter, new_cost)
         
         # --
         # LK
         
-        print('start lk')
         prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
                  dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
-        print('done lk')
+        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+        print(inner_iter, new_cost)
         
         # --
         # RC
         
-        print('start rc')
-        new_cost, new_pen = do_rc(**prob)
-        print('done rc')
+        _, _ = do_rc(**prob)
+        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+        print(inner_iter, new_cost)
         
-        print('start lk')
         prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
                 dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
-        print('done lk')
-        
         new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        
         print(inner_iter, new_cost)
         if new_cost < tmp_cost:
             tmp_cost = new_cost

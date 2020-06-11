@@ -53,8 +53,14 @@ def do_rc(
                     improved = True
                     cost -= sav
                     
-                    new_cost = suc2cost(node2suc, dist, n_vehicles)
-                    assert ((new_cost - cost) ** 2) < EPS
+                    # >>
+                    # VALIDATE
+                    c = suc2cost(node2suc, dist, n_vehicles)
+                    assert ((c - cost) ** 2) < EPS
+                    
+                    p = cap.route2pen(r0, node2suc, cap__data, cap__maxval)
+                    assert p == 0
+                    # <<
                     
                     break
                 
