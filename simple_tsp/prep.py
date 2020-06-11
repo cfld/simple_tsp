@@ -76,12 +76,15 @@ def load_solution(inpath):
 # --
 # Generate candidate edges
 
-def knn_candidates(dist, n_cands):
-    tmp      = dist + (np.eye(dist.shape[0]) * dist.max()) # Can't be near self
-    cand_idx = np.argsort(tmp, axis=-1)
+def knn_candidates(dist, n_cands, n_vehicles=1):
+    big_val = 2 * dist.max()
+    mask    = np.eye(dist.shape[0]) * big_val # can't be near self
+    mask[:n_vehicles,:n_vehicles] = big_val   # depots can't be close
+    
+    cand_idx = np.argsort(dist + mask, axis=-1)
     cand_idx = cand_idx[:,:n_cands]
     return cand_idx
-
+    
 # --
 # Generate initial route
 
