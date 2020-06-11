@@ -58,6 +58,26 @@ def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
 
 
 @njit(cache=True)
+def execute_rel(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route):
+    node2suc[n0_pre] = n0_suc
+    node2pre[n0_suc] = n0_pre
+    
+    node2route[n0] = node2route[n1]
+    if forward1:
+        node2suc[n1] = n0
+        node2pre[n0] = n1
+        
+        node2suc[n0] = n1_neib
+        node2pre[n1_neib] = n0
+    else:
+        node2suc[n1_neib] = n0
+        node2pre[n0] = n1_neib
+        
+        node2suc[n0] = n1
+        node2pre[n1] = n0
+
+
+@njit(cache=True)
 def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
     n_moves = depth + 1
     
@@ -125,7 +145,7 @@ def do_camk(
     improved = True
     while improved:
         improved = False
-        for n00 in range(n_nodes):
+        for n00 in np.random.permutation(n_nodes):
             for d0 in [1, -1]:
 
                 r0  = node2route[n00]

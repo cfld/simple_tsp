@@ -24,6 +24,7 @@ from simple_tsp.perturb import double_bridge_kick, double_bridge_kick_targeted
 
 from simple_tsp.cam import do_camk
 from simple_tsp.ce_cam import do_camce
+from simple_tsp.rc import do_rc
 from simple_tsp.cam_helpers import knn_candidates, routes2cost, walk_routes
 from simple_tsp.cam_init import random_pos2node, init_routes
 
@@ -100,7 +101,8 @@ best_pen  = 0
 
 print(best_cost, best_pen)
 
-for it in range(100):
+tt = time()
+for it in range(1):
     
     # Perturb
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
@@ -112,25 +114,25 @@ for it in range(100):
     while improved:
         improved = False
         
-        new_cost, new_pen = do_camk(
-            dist,
-            near, 
+        # new_cost, new_pen = do_camk(
+        #     dist,
+        #     near, 
             
-            node2pre,
-            node2suc,
-            node2route,
-            node2depot, 
+        #     node2pre,
+        #     node2suc,
+        #     node2route,
+        #     node2depot, 
             
-            n_nodes, 
-            n_vehicles, 
+        #     n_nodes, 
+        #     n_vehicles, 
             
-            max_depth=args.max_depth,
+        #     max_depth=args.max_depth,
             
-            # @CONSTRAINT -- params
-            cap__data=cap__data,
-            cap__maxval=cap__maxval, 
-            # <<
-        )
+        #     # @CONSTRAINT -- params
+        #     cap__data=cap__data,
+        #     cap__maxval=cap__maxval, 
+        #     # <<
+        # )
         
         # CE move
         new_cost, new_pen, changed = do_camce(
@@ -170,6 +172,46 @@ for it in range(100):
             pos2node[pos2route == depot] = route[lk_opt[:-1]]
         
         node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        # >>
+        
+        new_cost, new_pen = do_rc(
+            dist,
+            near, 
+            
+            node2pre,
+            node2suc,
+            node2route,
+            node2depot, 
+            
+            n_nodes, 
+            n_vehicles, 
+            
+            # @CONSTRAINT -- params
+            cap__data=cap__data,
+            cap__maxval=cap__maxval, 
+            # <<
+        )
+
+        # >> LK the slow way
+        from simple_tsp.lk import lk_solve
+        from simple_tsp.cam_helpers import walk_route
+        
+        pos2node = np.hstack(walk_routes(n_vehicles, node2suc))
+        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        
+        for depot in range(n_vehicles):
+            route   = walk_route(depot, node2suc)
+            proute  = np.arange(len(route))
+            proute  = np.hstack([proute, [0]])
+            
+            subdist = dist[route][:,route]
+            subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
+            
+            lk_opt = lk_solve(subdist, subnear, proute, depth=4)
+            pos2node[pos2route == depot] = route[lk_opt[:-1]]
+        
+        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        # >>
         
         new_cost = routes2cost(dist, node2suc, n_vehicles)
         
@@ -186,7 +228,7 @@ for it in range(100):
         best_pen   = new_pen
     
     total += new_cost
-    print(it, new_cost, new_pen, best_cost, best_pen, tt)
+    print(it, new_cost, new_pen, best_cost, best_pen, time() - tt)
 
     # Perturb
     # <<

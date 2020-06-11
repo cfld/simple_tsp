@@ -44,7 +44,7 @@ def do_camce(
     while improved:
         improved = False
 
-        for n00 in range(n_nodes):
+        for n00 in np.random.permutation(n_nodes):
             for d0 in [1, -1]:
                 forward0 = d0 == 1
                 

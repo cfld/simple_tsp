@@ -24,7 +24,6 @@ def cap__compute_gain(acc, depth, cap):
     gain = p_old - p_new
     return gain
 
-
 @njit(cache=True)
 def cap__route2pen(depot, node2suc, node2pen, cap):
     node = node2suc[depot]
@@ -38,6 +37,15 @@ def cap__route2pen(depot, node2suc, node2pen, cap):
     else:
         return 0
 
+@njit(cache=True)
+def cap__route2slack(depot, node2suc, node2pen, cap):
+    node = node2suc[depot]
+    p = 0
+    while node != depot:
+        p += node2pen[node]
+        node = node2suc[node]
+    
+    return cap - p
 
 @njit(cache=True)
 def cap__routes2pen(n_vehicles, node2suc, node2pen, cap):
