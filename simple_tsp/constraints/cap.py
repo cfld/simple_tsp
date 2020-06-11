@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 
 @njit(cache=True)
-def add_node(node, before, node2suc, node2pre, node2depot, val):
+def partial(node, before, node2suc, node2pre, node2depot, val):
     p = 0
     while not node2depot[node]:
         p += val[node]
@@ -24,6 +24,7 @@ def compute_gain(acc, depth, cap):
     gain = p_old - p_new
     return gain
 
+
 @njit(cache=True)
 def route2pen(depot, node2suc, node2pen, cap):
     node = node2suc[depot]
@@ -37,6 +38,7 @@ def route2pen(depot, node2suc, node2pen, cap):
     else:
         return 0
 
+
 @njit(cache=True)
 def route2slack(depot, node2suc, node2pen, cap):
     node = node2suc[depot]
@@ -47,10 +49,18 @@ def route2slack(depot, node2suc, node2pen, cap):
     
     return cap - p
 
+
 @njit(cache=True)
-def routes2pen(n_vehicles, node2suc, node2pen, cap):
+def routes2pen(node2suc, n_vehicles, node2pen, cap):
     p = 0
     for r in range(n_vehicles):
         p += route2pen(r, node2suc, node2pen, cap)
     
     return p
+
+
+@njit(cache=True)
+def slide_node(acc_row, node, forward, vals):
+    val = vals[node]
+    acc_row[0] += val
+    acc_row[1] -= val

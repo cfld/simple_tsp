@@ -99,7 +99,7 @@ def random_init(n_nodes, n_vehicles=1, random_state=None):
 # Initialize datastructures
 
 @njit(cache=True)
-def init_datastructures(pos2node, n_nodes, n_vehicles):
+def route2lookups(pos2node, n_nodes, n_vehicles):
     node2pos   = np.argsort(pos2node)
     pos2depot  = (pos2node < n_vehicles).astype(np.int32)
     pos2route  = np.cumsum(pos2depot) - 1

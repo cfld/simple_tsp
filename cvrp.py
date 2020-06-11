@@ -17,16 +17,40 @@ import numpy as np
 from time import time
 from scipy.spatial.distance import squareform, pdist
 
-from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
 from simple_tsp.perturb import double_bridge_kick, double_bridge_kick_targeted
+from simple_tsp.prep import load_problem, random_init, route2lookups, knn_candidates
 
 from simple_tsp.moves.rc import do_rc
+from simple_tsp.moves.ce import do_ce
 from simple_tsp.moves.ropt import do_ropt
-from simple_tsp.moves.ce_cam import do_camce
+from simple_tsp.moves.lk import lk_solve
 
-from simple_tsp.cam_helpers import knn_candidates, routes2cost, walk_routes
-from simple_tsp.cam_init import random_pos2node, init_routes
+from simple_tsp.helpers import suc2cost, walk_routes, walk_route
+
+# --
+# Helpers
+
+def dumb_lk(node2suc, changed, n_nodes, n_vehicles):
+    pos2node = np.hstack(walk_routes(node2suc, n_nodes, n_vehicles))
+    node2pre, node2suc, node2route, node2depot, pos2route = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
+    
+    for depot in changed:
+        route   = walk_route(depot, node2suc)
+        
+        proute  = np.arange(len(route))
+        proute  = np.hstack([proute, [0]])
+        
+        subdist = dist[route][:,route]
+        subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
+        
+        lk_opt = lk_solve(subdist, subnear, proute, depth=4)
+        pos2node[pos2route == depot] = route[lk_opt[:-1]]
+    
+    return route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
+
+# --
+# CLI
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -82,20 +106,17 @@ cap__data   = demand
 cap__maxval = cap
 
 tt = 0
-_ = np.random.seed(123)
-total = 0
 
 # Init
 # <<
-# best_route = random_pos2node(n_vehicles, n_nodes)
+# best_route = random_init(n_vehicles, n_nodes)
 # best_pen  = np.inf
 # best_cost = np.inf
 # pos2node = best_route.copy()
 # --
-from simple_tsp.cam_helpers import routes2cost
 pos2node = best_route.copy()
-node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
-best_cost = routes2cost(dist, node2suc, n_vehicles)
+node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
+best_cost = suc2cost(node2suc, dist, n_vehicles)
 best_pen  = 0
 # >>
 
@@ -105,143 +126,92 @@ tt = time()
 for it in range(1):
     
     # Perturb
-    node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
+    node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
     
     # Optimize    
-    tmp_cost = routes2cost(dist, node2suc, n_vehicles)
+    tmp_cost = suc2cost(node2suc, dist, n_vehicles)
     
-    improved = True
+    improved   = True
+    inner_iter = 0
     while improved:
         improved = False
         
-        # new_cost, new_pen = do_camk(
-        #     dist,
-        #     near, 
+        prob = {
+            "dist" : dist,
+            "near" : near, 
             
-        #     node2pre,
-        #     node2suc,
-        #     node2route,
-        #     node2depot, 
+            "node2pre"   : node2pre,
+            "node2suc"   : node2suc,
+            "node2route" : node2route,
+            "node2depot" : node2depot, 
             
-        #     n_nodes, 
-        #     n_vehicles, 
-            
-        #     max_depth=args.max_depth,
-            
-        #     # @CONSTRAINT -- params
-        #     cap__data=cap__data,
-        #     cap__maxval=cap__maxval, 
-        #     # <<
-        # )
-        
-        # CE move
-        new_cost, new_pen, changed = do_camce(
-            dist,
-            near, 
-            
-            node2pre,
-            node2suc,
-            node2route,
-            node2depot, 
-            
-            n_nodes, 
-            n_vehicles, 
+            "n_nodes"    : n_nodes, 
+            "n_vehicles" : n_vehicles, 
             
             # @CONSTRAINT -- params
-            cap__data=cap__data,
-            cap__maxval=cap__maxval, 
+            "cap__data"   : cap__data,
+            "cap__maxval" : cap__maxval, 
             # <<
-        )
-        
-        # >> LK the slow way
-        from simple_tsp.lk import lk_solve
-        from simple_tsp.cam_helpers import walk_route
-        
-        pos2node = np.hstack(walk_routes(n_vehicles, node2suc))
-        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
-        
-        for depot in changed:
-            route   = walk_route(depot, node2suc)
-            proute  = np.arange(len(route))
-            proute  = np.hstack([proute, [0]])
             
-            subdist = dist[route][:,route]
-            subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
-            
-            lk_opt = lk_solve(subdist, subnear, proute, depth=4)
-            pos2node[pos2route == depot] = route[lk_opt[:-1]]
+        }
         
-        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
-        # >>
+        # --
+        # CE
         
-        new_cost, new_pen = do_rc(
-            dist,
-            near, 
-            
-            node2pre,
-            node2suc,
-            node2route,
-            node2depot, 
-            
-            n_nodes, 
-            n_vehicles, 
-            
-            # @CONSTRAINT -- params
-            cap__data=cap__data,
-            cap__maxval=cap__maxval, 
-            # <<
-        )
-
-        # >> LK the slow way
-        from simple_tsp.lk import lk_solve
-        from simple_tsp.cam_helpers import walk_route
+        print('start ce')
+        new_cost, new_pen, changed = do_ce(**prob)
+        print('done ce')
         
-        pos2node = np.hstack(walk_routes(n_vehicles, node2suc))
-        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        # --
+        # LK
         
-        for depot in range(n_vehicles):
-            route   = walk_route(depot, node2suc)
-            proute  = np.arange(len(route))
-            proute  = np.hstack([proute, [0]])
-            
-            subdist = dist[route][:,route]
-            subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
-            
-            lk_opt = lk_solve(subdist, subnear, proute, depth=4)
-            pos2node[pos2route == depot] = route[lk_opt[:-1]]
+        print('start lk')
+        prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
+                 dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
+        print('done lk')
         
-        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
-        # >>
+        # --
+        # RC
         
-        new_cost = routes2cost(dist, node2suc, n_vehicles)
+        print('start rc')
+        new_cost, new_pen = do_rc(**prob)
+        print('done rc')
         
-        print('post_cost', new_cost)
+        print('start lk')
+        prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
+                dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
+        print('done lk')
+        
+        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+        
+        print(inner_iter, new_cost)
         if new_cost < tmp_cost:
             tmp_cost = new_cost
             improved = True
+            inner_iter += 1
     
-    # Record
-    if (new_pen, new_cost) < (best_pen, best_cost):
-        best_route = np.hstack(walk_routes(n_vehicles, node2suc))
-        assert len(best_route) == n_nodes
-        best_cost  = new_cost
-        best_pen   = new_pen
+    # # Record
+    # if (new_pen, new_cost) < (best_pen, best_cost):
+    #     best_route = np.hstack(walk_routes(node2suc, n_nodes, n_vehicles))
+    #     assert len(best_route) == n_nodes
+    #     best_cost  = new_cost
+    #     best_pen   = new_pen
     
-    total += new_cost
-    print(it, new_cost, new_pen, best_cost, best_pen, time() - tt)
+    # total += new_cost
+    # print(it, new_cost, new_pen, best_cost, best_pen, time() - tt)
 
-    # Perturb
-    # <<
-    # pos2node = double_bridge_kick(best_route)
-    # --
-    # pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
-    # --
-    # from simple_tsp.cam_constraints import cap__route2pen
-    # from simple_tsp.perturb import double_bridge_kick_weighted
-    # weights = np.array([cap__route2pen(i, node2suc, cap__data, cap__maxval) for i in range(n_vehicles)])
-    # weights = weights[node2route]
-    # weights = weights / weights.sum()
-    # pos2node = double_bridge_kick_weighted(best_route, weights)
-    # >>
+    # # Perturb
+    # # <<
+    # # pos2node = double_bridge_kick(best_route)
+    # # --
+    # # pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
+    # # --
+    # # from simple_tsp.cam_constraints import cap__route2pen
+    # # from simple_tsp.perturb import double_bridge_kick_weighted
+    # # weights = np.array([cap__route2pen(i, node2suc, cap__data, cap__maxval) for i in range(n_vehicles)])
+    # # weights = weights[node2route]
+    # # weights = weights / weights.sum()
+    # # pos2node = double_bridge_kick_weighted(best_route, weights)
+    # # >>
     
-    pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
+    # pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)

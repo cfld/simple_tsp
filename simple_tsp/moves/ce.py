@@ -1,19 +1,14 @@
 import numpy as np
 from numba import njit
 
-from .cam_helpers import routes2cost
-from .cam_constraints import cap__add_node, cap__compute_gain, cap__routes2pen
-from .cam import execute_move, reverse_move, flip_route
-
-@njit(cache=True)
-def cap__slide_node(acc_row, node, forward, vals):
-    val = vals[node]
-    acc_row[0] += val
-    acc_row[1] -= val
+from simple_tsp.helpers import suc2cost
+from simple_tsp.constraints import cap
+from simple_tsp.execute import execute_ropt, reverse_ropt
+from simple_tsp.utils import EPS
 
 
 @njit(cache=True)
-def do_camce(
+def do_ce(
         dist,
         near,
         
@@ -29,10 +24,10 @@ def do_camce(
         cap__maxval,
     ):
 
-    cost = routes2cost(dist, node2suc, n_vehicles)
+    cost = suc2cost(node2suc, dist, n_vehicles)
     
     # >> @CONSTRAINT -- init
-    pen = cap__routes2pen(n_vehicles, node2suc, cap__data, cap__maxval)
+    pen = cap.routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
     # <<
     
     move0 = np.zeros((2, 4), dtype=np.int64) - 1
@@ -55,8 +50,8 @@ def do_camce(
                 move0[0] = (n00, n01, r0, np.int64(not forward0))
                 
                 cap__acc0[0] = (
-                    cap__add_node(n00,     forward0, node2suc, node2pre, node2depot, cap__data),
-                    cap__add_node(n01, not forward0, node2suc, node2pre, node2depot, cap__data),
+                    cap.partial(n00,     forward0, node2suc, node2pre, node2depot, cap__data),
+                    cap.partial(n01, not forward0, node2suc, node2pre, node2depot, cap__data),
                 )
                 
                 gain, sav = _find_move0(
@@ -77,7 +72,7 @@ def do_camce(
                     cap__data,
                     cap__maxval,
                 )
-                if (gain > 0) or (gain == 0 and sav > 1e-5):
+                if (gain > 0) or (gain == 0 and sav > EPS):
                     improved = True
                     cost -= sav
                     pen  -= gain
@@ -132,13 +127,13 @@ def _find_move0(
             move0[1] = (n10, n11, r1, np.int64(not forward1))
             
             cap__acc0[1] = (
-                cap__add_node(n10,     forward1, node2suc, node2pre, node2depot, cap__data),
-                cap__add_node(n11, not forward1, node2suc, node2pre, node2depot, cap__data),
+                cap.partial(n10,     forward1, node2suc, node2pre, node2depot, cap__data),
+                cap.partial(n11, not forward1, node2suc, node2pre, node2depot, cap__data),
             )
             
-            gain0 = cap__compute_gain(cap__acc0, 1, cap__maxval)
+            gain0 = cap.compute_gain(cap__acc0, 1, cap__maxval)
             
-            execute_move(move0, 1, node2pre, node2suc, node2route, node2depot)
+            execute_ropt(move0, 1, node2pre, node2suc, node2route, node2depot)
             
             move1, gain, sav = _find_move1(
                 gain0,
@@ -165,10 +160,10 @@ def _find_move0(
                 cap__maxval,
             )
             if (gain > 0) or (gain == 0 and sav > 0):
-                execute_move(move1, 1, node2pre, node2suc, node2route, node2depot)
+                execute_ropt(move1, 1, node2pre, node2suc, node2route, node2depot)
                 return gain, sav
             else:
-                reverse_move(move0, 1, node2pre, node2suc, node2route, node2depot)
+                reverse_ropt(move0, 1, node2pre, node2suc, node2route, node2depot)
     
     return 0, 0
 
@@ -208,8 +203,8 @@ def _find_move1(
         x00_ = n00
         x01_ = node2suc[x00_] if xforward0 else node2pre[x00_]
         tmp0 =  (
-            cap__add_node(x00_,     xforward0, node2suc, node2pre, node2depot, cap__data),
-            cap__add_node(x01_, not xforward0, node2suc, node2pre, node2depot, cap__data),
+            cap.partial(x00_,     xforward0, node2suc, node2pre, node2depot, cap__data),
+            cap.partial(x01_, not xforward0, node2suc, node2pre, node2depot, cap__data),
         )
         
         for xd1 in [1, -1]: # xforward1
@@ -222,8 +217,8 @@ def _find_move1(
             x10_ = n10
             x11_ = node2suc[x10_] if xforward1 else node2pre[x10_]
             tmp1 = (
-                cap__add_node(x10_,     xforward1, node2suc, node2pre, node2depot, cap__data),
-                cap__add_node(x11_, not xforward1, node2suc, node2pre, node2depot, cap__data),
+                cap.partial(x10_,     xforward1, node2suc, node2pre, node2depot, cap__data),
+                cap.partial(x11_, not xforward1, node2suc, node2pre, node2depot, cap__data),
             )
             
             while True: # x00
@@ -233,7 +228,7 @@ def _find_move1(
                 cap__acc1[1] = tmp1
                 
                 while True: # x10
-                    gain1 = gain0 + cap__compute_gain(cap__acc1, 1, cap__maxval)
+                    gain1 = gain0 + cap.compute_gain(cap__acc1, 1, cap__maxval)
                     if gain1 >= 0:
                         sav1 = sav0 + (
                             + dist[x00, x01]
@@ -251,14 +246,14 @@ def _find_move1(
                     if node2depot[x11]: break
                     x10 = x11
                     x11 = node2suc[x10] if xforward1 else node2pre[x10]
-                    cap__slide_node(cap__acc1[1], x10, xforward1, cap__data)
+                    cap.slide_node(cap__acc1[1], x10, xforward1, cap__data)
                     
                     if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
                 
                 if node2depot[x01]: break
                 x00 = x01
                 x01 = node2suc[x00] if xforward0 else node2pre[x00]
-                cap__slide_node(cap__acc1[0], x00, xforward0, cap__data)
+                cap.slide_node(cap__acc1[0], x00, xforward0, cap__data)
     
     return move1, 0, 0
     

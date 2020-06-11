@@ -70,7 +70,7 @@ def execute_ropt(move, depth, node2pre, node2suc, node2route, node2depot):
         n01 = move[i, 1]
         n10 = move[j, 0]
         r   = move[j, 2]
-        change_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
+        add_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
 
 
 @njit(cache=True)
@@ -81,9 +81,9 @@ def reverse_ropt(move, depth, node2pre, node2suc, node2route, node2depot):
     for i in range(n_moves):
         n0, n1, r, flip = move[i]
         if flip == 0:
-            change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
+            add_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
         else:
-            change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
+            add_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
             flip_route(r, node2pre, node2suc, node2depot)
 
 # --
@@ -107,3 +107,7 @@ def execute_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2s
         
         node2suc[n0] = n1
         node2pre[n1] = n0
+
+@njit(cache=True, inline='always')
+def reverse_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route):
+    execute_relocate(n0, node2pre[n0], node2suc[n0], n0_pre, n0_suc, True, node2pre, node2suc, node2route)

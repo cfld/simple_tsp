@@ -9,7 +9,8 @@ from numba import njit
 
 from ..helpers import suc2cost
 from ..constraints import cap
-from ..execute import execute_relocate
+from ..execute import execute_relocate, reverse_relocate
+from simple_tsp.utils import CostModel, EPS
 
 @njit(cache=True)
 def do_rc(
@@ -34,7 +35,9 @@ def do_rc(
     
     cost = suc2cost(node2suc, dist, n_vehicles)
     
-    slacks = np.array([cap__route2slack(r, node2suc, cap__data, cap__maxval) for r in range(n_vehicles)])
+    # >> @CONSTRAINT
+    slacks = np.array([cap.route2slack(r, node2suc, cap__data, cap__maxval) for r in range(n_vehicles)])
+    # <<
     
     improved = True
     while improved:
@@ -46,12 +49,12 @@ def do_rc(
                 n0_suc = node2suc[n0]
                 
                 sav, gain  = _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks)
-                if sav > 1e-6:
+                if sav > EPS:
                     improved = True
                     cost -= sav
                     
                     new_cost = suc2cost(node2suc, dist, n_vehicles)
-                    assert ((new_cost - cost) ** 2) < 1e-6
+                    assert ((new_cost - cost) ** 2) < EPS
                     
                     break
                 
@@ -60,16 +63,6 @@ def do_rc(
                 n0_suc = node2suc[n0]
     
     return cost, 0
-
-class CostModel:
-    def __init__(self, n):
-        self._i = 0
-        self._n = n
-
-    def __call__(self, expr, caller, callee):
-        ret = self._i < self._n
-        self._i += 1
-        return ret
 
 @njit(cache=True, inline=CostModel(4))
 def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=0, go_deeper=2):
@@ -96,17 +89,21 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
             )
             
             # exit now
-            if sav0 < 1e-6: continue
+            if sav0 < EPS: continue
             
+            # >> @CONSTRAINT
             if slacks[r1] >= cap__data[n0] and slacks[r0] + cap__data[n0] >= 0:
-                execute_rel(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+            # <<
+                execute_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+                # >> @CONSTRAINT
                 slacks[r0] += cap__data[n0]
                 slacks[r1] -= cap__data[n0]
+                # <<
                 return sav0, 0
             
             # go deeper
             if go_deeper > 0:
-                execute_rel(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+                execute_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
                 slacks[r0] += cap__data[n0]
                 slacks[r1] -= cap__data[n0]
                 
@@ -115,18 +112,22 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                     n2_pre = node2pre[n2]
                     n2_suc = node2suc[n2]
                     
+                    # >> @CONSTRAINT
                     if slacks[r1] + cap__data[n2] >= 0:
+                    # <<
                         sav1, gain = _find_insert(n2, n2_pre, n2_suc, r1, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=sav0, go_deeper=go_deeper - 1)
-                        if sav1 > 1e-6:
+                        if sav1 > EPS:
                             return sav1, gain
                     
                     n2     = n2_suc
                     n2_pre = node2pre[n2]
                     n2_suc = node2suc[n2]
                 
-                execute_rel(n0, node2pre[n0], node2suc[n0], n0_pre, n0_suc, True, node2pre, node2suc, node2route)
+                reverse_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+                # >> @CONSTRAINT
                 slacks[r0] -= cap__data[n0]
                 slacks[r1] += cap__data[n0]
+                # <<
 
     
     return 0, 0

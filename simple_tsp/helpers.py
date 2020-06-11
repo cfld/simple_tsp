@@ -47,7 +47,7 @@ def suc2cost(node2suc, dist, n_vehicles):
     return cost
 
 @njit(cache=True)
-def walk_suc(depot, node2suc):
+def walk_route(depot, node2suc):
     route = []
     node = depot
     while True:
@@ -58,7 +58,7 @@ def walk_suc(depot, node2suc):
     return np.array(route)
 
 
-def walk_sucs(node2suc, n_nodes, n_vehicles, verbose=False):
+def walk_routes(node2suc, n_nodes, n_vehicles, verbose=False):
     if verbose: print('-' * 50)
     routes = []
     counter = 0

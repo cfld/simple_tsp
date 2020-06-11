@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 """
-    simple_tsp/lk.py
+    simple_tsp/moves/lk.py
 """
 
 import numpy as np
 from numba import njit
 
-from simple_tsp.lk_checkers import check_move
+from simple_tsp.moves._lk_checkers import check_move
+from simple_tsp.utils import CostModel
 
 # --
 # Helpers
@@ -105,16 +106,6 @@ def lk_move(neibs, dist, pos2node, node2pos, c1, c2, n_nodes, max_depth, dlb):
     
     return _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, sav, n_nodes, 0, max_depth, dlb)
 
-
-class CostModel:
-    def __init__(self, n):
-        self._i = 0
-        self._n = n
-
-    def __call__(self, expr, caller, callee):
-        ret = self._i < self._n
-        self._i += 1
-        return ret
 
 @njit(cache=True, inline=CostModel(5))
 def _lk_move(neibs, dist, pos2node, node2pos, cs, csh, new, old, saving, n_nodes, depth, max_depth, dlb):
