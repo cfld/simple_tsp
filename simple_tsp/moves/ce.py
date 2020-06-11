@@ -17,6 +17,8 @@ def do_ce(
         node2route,
         node2depot,
         
+        route2stale,
+        
         n_nodes,
         n_vehicles,
         
@@ -27,13 +29,11 @@ def do_ce(
     cost = suc2cost(node2suc, dist, n_vehicles)
     
     # >> @CONSTRAINT -- init
+    cap__acc0 = np.zeros((2, 2), dtype=np.int64) - 1
     pen = cap.routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
     # <<
     
     move0 = np.zeros((2, 4), dtype=np.int64) - 1
-    cap__acc0 = np.zeros((2, 2), dtype=np.int64) - 1
-    
-    changed = set([-1]); changed.clear()
     
     improved = True
     while improved:
@@ -49,10 +49,12 @@ def do_ce(
                 
                 move0[0] = (n00, n01, r0, np.int64(not forward0))
                 
+                # >> @CONSTRAINT
                 cap__acc0[0] = (
                     cap.partial(n00,     forward0, node2suc, node2pre, node2depot, cap__data),
                     cap.partial(n01, not forward0, node2suc, node2pre, node2depot, cap__data),
                 )
+                # <<
                 
                 gain, sav = _find_move0(
                     move0,
@@ -77,10 +79,10 @@ def do_ce(
                     cost -= sav
                     pen  -= gain
                     
-                    changed.add(move0[0, 2])
-                    changed.add(move0[1, 2])
+                    route2stale[move0[0, 2]] = True
+                    route2stale[move0[1, 2]] = True
     
-    return cost, pen, np.array(list(changed))
+    return cost, pen
 
 @njit(cache=True)
 def _find_move0(
@@ -126,12 +128,13 @@ def _find_move0(
             
             move0[1] = (n10, n11, r1, np.int64(not forward1))
             
+            # >> @CONSTRAINT
             cap__acc0[1] = (
                 cap.partial(n10,     forward1, node2suc, node2pre, node2depot, cap__data),
                 cap.partial(n11, not forward1, node2suc, node2pre, node2depot, cap__data),
             )
-            
             gain0 = cap.compute_gain(cap__acc0, 1, cap__maxval)
+            # <<
             
             execute_ropt(move0, 1, node2pre, node2suc, node2route, node2depot)
             

@@ -31,20 +31,23 @@ from simple_tsp.helpers import suc2cost, walk_routes, walk_route
 # --
 # Helpers
 
-def dumb_lk(node2suc, changed, n_nodes, n_vehicles):
+def dumb_lk(node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=10):
     pos2node = np.hstack(walk_routes(node2suc, n_nodes, n_vehicles))
     node2pre, node2suc, node2route, node2depot, pos2route = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
     
-    for depot in changed:
+    for depot in range(n_vehicles):
+        if not route2stale[depot]: continue
+        route2stale[depot] = False
+        
         route   = walk_route(depot, node2suc)
         
         proute  = np.arange(len(route))
         proute  = np.hstack([proute, [0]])
         
         subdist = dist[route][:,route]
-        subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
+        subnear = knn_candidates(subdist, n_cands=n_cands, n_vehicles=1)
         
-        lk_opt = lk_solve(subdist, subnear, proute, depth=4)
+        lk_opt = lk_solve(subdist, subnear, proute, depth=depth)
         pos2node[pos2route == depot] = route[lk_opt[:-1]]
     
     return route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
@@ -122,92 +125,69 @@ best_pen  = 0
 
 print(best_cost, best_pen)
 
-tt = time()
-for it in range(1):
-    
-    # Perturb
-    node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
-    
-    # Optimize    
-    tmp_cost = suc2cost(node2suc, dist, n_vehicles)
-    
-    improved   = True
-    inner_iter = 0
-    while improved:
-        improved = False
-        
-        prob = {
-            "dist" : dist,
-            "near" : near, 
-            
-            "node2pre"   : node2pre,
-            "node2suc"   : node2suc,
-            "node2route" : node2route,
-            "node2depot" : node2depot, 
-            
-            "n_nodes"    : n_nodes, 
-            "n_vehicles" : n_vehicles, 
-            
-            # @CONSTRAINT -- params
-            "cap__data"   : cap__data,
-            "cap__maxval" : cap__maxval, 
-            # <<
-            
-        }
-        
-        # --
-        # CE
-        
-        _, _, changed = do_ce(**prob)
-        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        print(inner_iter, new_cost)
-        
-        # --
-        # LK
-        
-        prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
-                 dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
-        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        print(inner_iter, new_cost)
-        
-        # --
-        # RC
-        
-        _, _ = do_rc(**prob)
-        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        print(inner_iter, new_cost)
-        
-        prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
-                dumb_lk(prob['node2suc'], changed, n_nodes, n_vehicles)
-        new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        print(inner_iter, new_cost)
-        if new_cost < tmp_cost:
-            tmp_cost = new_cost
-            improved = True
-            inner_iter += 1
-    
-    # # Record
-    # if (new_pen, new_cost) < (best_pen, best_cost):
-    #     best_route = np.hstack(walk_routes(node2suc, n_nodes, n_vehicles))
-    #     assert len(best_route) == n_nodes
-    #     best_cost  = new_cost
-    #     best_pen   = new_pen
-    
-    # total += new_cost
-    # print(it, new_cost, new_pen, best_cost, best_pen, time() - tt)
+# Perturb
+node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
 
-    # # Perturb
-    # # <<
-    # # pos2node = double_bridge_kick(best_route)
-    # # --
-    # # pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
-    # # --
-    # # from simple_tsp.cam_constraints import cap__route2pen
-    # # from simple_tsp.perturb import double_bridge_kick_weighted
-    # # weights = np.array([cap__route2pen(i, node2suc, cap__data, cap__maxval) for i in range(n_vehicles)])
-    # # weights = weights[node2route]
-    # # weights = weights / weights.sum()
-    # # pos2node = double_bridge_kick_weighted(best_route, weights)
-    # # >>
+prob = {
+    "dist" : dist,
+    "near" : near, 
     
-    # pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
+    "node2pre"    : node2pre,
+    "node2suc"    : node2suc,
+    "node2route"  : node2route,
+    "node2depot"  : node2depot, 
+    
+    "route2stale" : np.ones(n_vehicles, dtype=bool),
+    
+    "n_nodes"    : n_nodes, 
+    "n_vehicles" : n_vehicles, 
+    
+    # @CONSTRAINT -- params
+    "cap__data"   : cap__data,
+    "cap__maxval" : cap__maxval, 
+    # <<
+}
+
+
+# Optimize
+best_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+
+t = time()
+
+inner_iter = 0
+while True:
+    
+    # --
+    # CE
+    
+    _, _ = do_ce(**prob)
+    
+    # --
+    # LK
+    
+    prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
+             dumb_lk(prob['node2suc'], n_nodes, n_vehicles, route2stale=prob['route2stale'])
+    
+    # --
+    # RC
+    
+    _, _ = do_rc(**prob)
+    
+    # --
+    # LK
+    
+    prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
+            dumb_lk(prob['node2suc'], n_nodes, n_vehicles, route2stale=prob['route2stale'])
+    
+    # --
+    # Score
+    
+    new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+    print('*', inner_iter, new_cost, time() - t)
+    
+    if new_cost < best_cost:
+        best_cost = new_cost
+    else:
+        break
+    
+    inner_iter += 1

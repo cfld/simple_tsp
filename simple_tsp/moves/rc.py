@@ -22,6 +22,8 @@ def do_rc(
         node2route,
         node2depot, 
         
+        route2stale,
+        
         n_nodes, 
         n_vehicles, 
         
@@ -30,8 +32,6 @@ def do_rc(
         cap__maxval, 
         # <<
     ):
-    
-    changed = set([-1]); changed.clear()
     
     cost = suc2cost(node2suc, dist, n_vehicles)
     
@@ -48,7 +48,7 @@ def do_rc(
                 n0_pre = node2pre[n0]
                 n0_suc = node2suc[n0]
                 
-                sav, gain  = _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks)
+                sav, gain  = _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks)
                 if sav > EPS:
                     improved = True
                     cost -= sav
@@ -71,7 +71,7 @@ def do_rc(
     return cost, 0
 
 @njit(cache=True, inline=CostModel(4))
-def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=0, go_deeper=2):
+def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=0, go_deeper=2):
     savp = sav + (
         + dist[n0, n0_pre]
         + dist[n0, n0_suc]
@@ -105,6 +105,8 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                 slacks[r0] += cap__data[n0]
                 slacks[r1] -= cap__data[n0]
                 # <<
+                route2stale[r0] = True
+                route2stale[r1] = True
                 return sav0, 0
             
             # go deeper
@@ -121,8 +123,10 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                     # >> @CONSTRAINT
                     if slacks[r1] + cap__data[n2] >= 0:
                     # <<
-                        sav1, gain = _find_insert(n2, n2_pre, n2_suc, r1, dist, near, node2pre, node2suc, node2route, node2depot, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=sav0, go_deeper=go_deeper - 1)
+                        sav1, gain = _find_insert(n2, n2_pre, n2_suc, r1, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=sav0, go_deeper=go_deeper - 1)
                         if sav1 > EPS:
+                            route2stale[r0] = True
+                            route2stale[r1] = True
                             return sav1, gain
                     
                     n2     = n2_suc
@@ -134,6 +138,5 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                 slacks[r0] -= cap__data[n0]
                 slacks[r1] += cap__data[n0]
                 # <<
-
     
     return 0, 0
