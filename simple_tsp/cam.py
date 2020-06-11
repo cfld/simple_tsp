@@ -57,7 +57,7 @@ def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
     node2pre[n1_suc] = n1
 
 
-@njit(cache=True)
+@njit(cache=True, inline='always')
 def execute_rel(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route):
     node2suc[n0_pre] = n0_suc
     node2pre[n0_suc] = n0_pre
