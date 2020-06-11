@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 
 @njit(cache=True)
-def cap__add_node(node, before, node2suc, node2pre, node2depot, val):
+def add_node(node, before, node2suc, node2pre, node2depot, val):
     p = 0
     while not node2depot[node]:
         p += val[node]
@@ -12,7 +12,7 @@ def cap__add_node(node, before, node2suc, node2pre, node2depot, val):
 
 
 @njit(cache=True)
-def cap__compute_gain(acc, depth, cap):
+def compute_gain(acc, depth, cap):
     p_new, p_old = 0, 0
     for i in range(depth + 1):
         pp = acc[i, 0] + acc[i, 1]
@@ -25,7 +25,7 @@ def cap__compute_gain(acc, depth, cap):
     return gain
 
 @njit(cache=True)
-def cap__route2pen(depot, node2suc, node2pen, cap):
+def route2pen(depot, node2suc, node2pen, cap):
     node = node2suc[depot]
     p = 0
     while node != depot:
@@ -38,7 +38,7 @@ def cap__route2pen(depot, node2suc, node2pen, cap):
         return 0
 
 @njit(cache=True)
-def cap__route2slack(depot, node2suc, node2pen, cap):
+def route2slack(depot, node2suc, node2pen, cap):
     node = node2suc[depot]
     p = 0
     while node != depot:
@@ -48,9 +48,9 @@ def cap__route2slack(depot, node2suc, node2pen, cap):
     return cap - p
 
 @njit(cache=True)
-def cap__routes2pen(n_vehicles, node2suc, node2pen, cap):
+def routes2pen(n_vehicles, node2suc, node2pen, cap):
     p = 0
     for r in range(n_vehicles):
-        p += cap__route2pen(r, node2suc, node2pen, cap)
+        p += route2pen(r, node2suc, node2pen, cap)
     
     return p

@@ -22,9 +22,10 @@ from simple_tsp.prep import load_problem
 from simple_tsp.helpers import set_seeds
 from simple_tsp.perturb import double_bridge_kick, double_bridge_kick_targeted
 
+from simple_tsp.rc import do_rc
 from simple_tsp.cam import do_camk
 from simple_tsp.ce_cam import do_camce
-from simple_tsp.rc import do_rc
+
 from simple_tsp.cam_helpers import knn_candidates, routes2cost, walk_routes
 from simple_tsp.cam_init import random_pos2node, init_routes
 
