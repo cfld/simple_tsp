@@ -26,6 +26,16 @@ def routes2cost(dist, node2suc, n_vehicles):
     
     return cost
 
+@njit(cache=True)
+def walk_route(depot, node2suc):
+    route = []
+    node = depot
+    while True:
+        route.append(node)
+        node = node2suc[node]
+        if node == depot: break
+    
+    return np.array(route)
 
 def walk_routes(n_vehicles, node2suc, verbose=False):
     n_nodes = node2suc.shape[0]

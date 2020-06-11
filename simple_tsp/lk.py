@@ -1,32 +1,3 @@
-
-Skip to content
-Pull requests
-Issues
-Marketplace
-Explore
-@bkj
-cfld /
-simple_tsp
-
-1
-2
-
-    0
-
-Code
-Issues 1
-Pull requests 0
-Actions
-Projects 0
-Wiki
-Security 0
-Insights
-
-    Settings
-
-simple_tsp/simple_tsp/lk.py /
-@bkj bkj testing 363b9ff 27 days ago
-208 lines (151 sloc) 6.12 KB
 #!/usr/bin/env python
 
 """
@@ -233,18 +204,3 @@ def execute_move(cs, pos2node, node2pos, pres, sucs, n_nodes):
             curr = sucs[curr]
     
     return pos2node, node2pos, pres, sucs
-
-    © 2020 GitHub, Inc.
-    Terms
-    Privacy
-    Security
-    Status
-    Help
-
-    Contact GitHub
-    Pricing
-    API
-    Training
-    Blog
-    About
-

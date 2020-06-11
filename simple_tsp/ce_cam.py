@@ -38,6 +38,8 @@ def do_camce(
     move0 = np.zeros((2, 4), dtype=np.int64) - 1
     cap__acc0 = np.zeros((2, 2), dtype=np.int64) - 1
     
+    changed = set([-1]); changed.clear()
+    
     improved = True
     while improved:
         improved = False
@@ -79,8 +81,11 @@ def do_camce(
                     improved = True
                     cost -= sav
                     pen  -= gain
+                    
+                    changed.add(move0[0, 2])
+                    changed.add(move0[1, 2])
     
-    return cost, pen
+    return cost, pen, np.array(list(changed))
 
 @njit(cache=True)
 def _find_move0(

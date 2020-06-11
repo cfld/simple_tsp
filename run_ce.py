@@ -7,6 +7,8 @@
     # !! Perturbations should target routes w/ penalties
     # !! Perturb with penalties, double bridge kick is too large, I think
         - How are penalties implemented in RoutingSolver?
+    
+    # !! With multiple nodes as depot, some neighbors are going to be all depot
 """
 
 import os
@@ -103,11 +105,13 @@ for it in range(100):
     # Perturb
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
     
-    # Optimize
-    t = time()
-    
+    # Optimize    
     tmp_cost = routes2cost(dist, node2suc, n_vehicles)
+    
+    improved = True
     while improved:
+        improved = False
+        
         new_cost, new_pen = do_camk(
             dist,
             near, 
@@ -128,7 +132,8 @@ for it in range(100):
             # <<
         )
         
-        new_cost, new_pen = do_camce(
+        # CE move
+        new_cost, new_pen, changed = do_camce(
             dist,
             near, 
             
@@ -145,8 +150,33 @@ for it in range(100):
             cap__maxval=cap__maxval, 
             # <<
         )
-    
-    tt += time() - t
+        
+        # >> LK the slow way
+        from simple_tsp.lk import lk_solve
+        from simple_tsp.cam_helpers import walk_route
+        
+        pos2node = np.hstack(walk_routes(n_vehicles, node2suc))
+        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        
+        for depot in changed:
+            route   = walk_route(depot, node2suc)
+            proute  = np.arange(len(route))
+            proute  = np.hstack([proute, [0]])
+            
+            subdist = dist[route][:,route]
+            subnear = knn_candidates(subdist, n_cands=10, n_vehicles=1)
+            
+            lk_opt = lk_solve(subdist, subnear, proute, depth=4)
+            pos2node[pos2route == depot] = route[lk_opt[:-1]]
+        
+        node2pre, node2suc, node2route, node2depot, pos2route = init_routes(pos2node, n_vehicles, n_nodes)
+        
+        new_cost = routes2cost(dist, node2suc, n_vehicles)
+        
+        print('post_cost', new_cost)
+        if new_cost < tmp_cost:
+            tmp_cost = new_cost
+            improved = True
     
     # Record
     if (new_pen, new_cost) < (best_pen, best_cost):
@@ -162,7 +192,7 @@ for it in range(100):
     # <<
     # pos2node = double_bridge_kick(best_route)
     # --
-    pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
+    # pos2node = double_bridge_kick_targeted(best_route, dist, node2suc, n_vehicles)
     # --
     # from simple_tsp.cam_constraints import cap__route2pen
     # from simple_tsp.perturb import double_bridge_kick_weighted

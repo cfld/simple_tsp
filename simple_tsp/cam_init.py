@@ -29,4 +29,4 @@ def init_routes(pos2node, n_vehicles, n_nodes):
         node2suc[node] = depot
         node2pre[depot] = node
     
-    return node2pre, node2suc, node2route, node2depot, pos2node
+    return node2pre, node2suc, node2route, node2depot, pos2route
