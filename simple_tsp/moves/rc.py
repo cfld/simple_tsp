@@ -1,8 +1,15 @@
+#!/usr/bin/env python
 
+"""
+    simple_tsp/moves/rc.py
+"""
 
-from .cam_helpers import routes2cost
-from .cam_constraints import *
-from .cam import execute_rel
+import numpy as np
+from numba import njit
+
+from ..helpers import suc2cost
+from ..constraints import cap
+from ..execute import execute_relocate
 
 @njit(cache=True)
 def do_rc(
@@ -25,7 +32,7 @@ def do_rc(
     
     changed = set([-1]); changed.clear()
     
-    cost = routes2cost(dist, node2suc, n_vehicles)
+    cost = suc2cost(node2suc, dist, n_vehicles)
     
     slacks = np.array([cap__route2slack(r, node2suc, cap__data, cap__maxval) for r in range(n_vehicles)])
     
@@ -43,7 +50,7 @@ def do_rc(
                     improved = True
                     cost -= sav
                     
-                    new_cost = routes2cost(dist, node2suc, n_vehicles)
+                    new_cost = suc2cost(node2suc, dist, n_vehicles)
                     assert ((new_cost - cost) ** 2) < 1e-6
                     
                     break

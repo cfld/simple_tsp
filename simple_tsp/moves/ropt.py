@@ -9,111 +9,10 @@ from .cam_helpers import routes2cost
 from .cam_constraints import *
 
 # --
-# Modify routes
-
-@njit(cache=True)
-def switch_depot(n, new_depot, node2pre, node2suc, node2route, node2depot, dir=1):
-    if node2depot[n]: return
-    
-    if dir == 1:
-        while True:
-            nn = node2suc[n]
-            node2route[n] = new_depot
-            if node2depot[nn]:
-                node2suc[n] = new_depot
-                node2pre[new_depot] = n
-                return
-            n = nn
-    else:
-        while True:
-            nn = node2pre[n]
-            node2route[n] = new_depot
-            if node2depot[nn]:
-                node2pre[n] = new_depot
-                node2suc[new_depot] = n
-                return
-            n = nn
-
-
-@njit(cache=True)
-def flip_route(depot, node2pre, node2suc, node2depot):
-    n = depot
-    while True:
-        nn = node2suc[n]
-        node2suc[n] = node2pre[n]
-        node2pre[n] = nn
-        
-        if node2depot[nn]:
-            break
-
-        n = nn
-
-
-@njit(cache=True)
-def change_edge(n0, n1, r, node2pre, node2suc, node2route, node2depot):
-    switch_depot(n0, r, node2pre, node2suc, node2route, node2depot)
-    n1_suc           = n0 if not node2depot[n0] else r
-    node2suc[n1]     = n1_suc
-    node2pre[n1_suc] = n1
-
-
-@njit(cache=True, inline='always')
-def execute_rel(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route):
-    node2suc[n0_pre] = n0_suc
-    node2pre[n0_suc] = n0_pre
-    
-    node2route[n0] = node2route[n1]
-    if forward1:
-        node2suc[n1] = n0
-        node2pre[n0] = n1
-        
-        node2suc[n0] = n1_neib
-        node2pre[n1_neib] = n0
-    else:
-        node2suc[n1_neib] = n0
-        node2pre[n0] = n1_neib
-        
-        node2suc[n0] = n1
-        node2pre[n1] = n0
-
-
-@njit(cache=True)
-def execute_move(move, depth, node2pre, node2suc, node2route, node2depot):
-    n_moves = depth + 1
-    
-    # Flip routes
-    for i in range(n_moves):
-        n0, n1, r, flip = move[i]
-        if flip:
-            flip_route(r, node2pre, node2suc, node2depot)
-    
-    # Change edges
-    for i in range(n_moves):
-        j   = (i + 1) % n_moves
-        n01 = move[i, 1]
-        n10 = move[j, 0]
-        r   = move[j, 2]
-        change_edge(n01, n10, r, node2pre, node2suc, node2route, node2depot)
-
-
-@njit(cache=True)
-def reverse_move(move, depth, node2pre, node2suc, node2route, node2depot):
-    n_moves = depth + 1
-    
-    # REVERSE Flip routes
-    for i in range(n_moves):
-        n0, n1, r, flip = move[i]
-        if flip == 0:
-            change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
-        else:
-            change_edge(n1, n0, r, node2pre, node2suc, node2route, node2depot)
-            flip_route(r, node2pre, node2suc, node2depot)
-
-# --
 # Run
 
 @njit(cache=True)
-def do_camk(
+def do_ropt(
         dist,
         near, 
         
@@ -162,7 +61,7 @@ def do_camk(
                 # << 
 
                 sav_init  = dist[n00, n01]
-                move, depth, gain, sav = _camk(
+                move, depth, gain, sav = _ropt(
                     move=move,
                     
                     dist=dist,
@@ -359,7 +258,7 @@ class CostModel:
     
     
 @njit(cache=True, inline=CostModel(5))
-def _camk(
+def _ropt(
         move,
         dist, near,
         node2pre, node2suc, node2route, node2depot,
@@ -442,7 +341,7 @@ def _camk(
                         return move, depth, gain, sav_close
             
             if depth < max_depth - 1:
-                _move, _depth, _gain, _sav = _camk(
+                _move, _depth, _gain, _sav = _ropt(
                     move=move,
                     
                     dist=dist,
