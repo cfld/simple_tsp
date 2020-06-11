@@ -248,7 +248,6 @@ def _find_move1(
                     x11 = node2suc[x10] if xforward1 else node2pre[x10]
                     cap__slide_node(cap__acc1[1], x10, xforward1, cap__data)
                     
-                    
                     if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
                 
                 if node2depot[x01]: break

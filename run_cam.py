@@ -24,7 +24,7 @@ from simple_tsp.cam_init import random_pos2node, init_routes
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
     parser.add_argument('--n-cands',      type=int, default=5)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)

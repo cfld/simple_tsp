@@ -62,12 +62,14 @@ n_nodes = demand.shape[0]
 # Distance
 
 xy = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
+xy = xy + np.arange(xy.shape[0]).reshape(-1, 1) / xy.shape[0] # prevent ties
+
 xy = np.row_stack([
     np.repeat(xy[0].reshape(1, -1), n_vehicles, axis=0),
     xy[1:]
 ])
 
-dist = squareform(pdist(xy)).astype(np.int32)
+dist = squareform(pdist(xy))# .astype(np.int32)
 near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
 # --
@@ -96,7 +98,7 @@ best_pen  = 0
 
 print(best_cost, best_pen)
 
-for it in range(1000):
+for it in range(100):
     
     # Perturb
     node2pre, node2suc, node2route, node2depot, _ = init_routes(pos2node, n_vehicles, n_nodes)
@@ -104,43 +106,45 @@ for it in range(1000):
     # Optimize
     t = time()
     
-    new_cost, new_pen = do_camk(
-        dist,
-        near, 
+    tmp_cost = routes2cost(dist, node2suc, n_vehicles)
+    while improved:
+        new_cost, new_pen = do_camk(
+            dist,
+            near, 
+            
+            node2pre,
+            node2suc,
+            node2route,
+            node2depot, 
+            
+            n_nodes, 
+            n_vehicles, 
+            
+            max_depth=args.max_depth,
+            
+            # @CONSTRAINT -- params
+            cap__data=cap__data,
+            cap__maxval=cap__maxval, 
+            # <<
+        )
         
-        node2pre,
-        node2suc,
-        node2route,
-        node2depot, 
-        
-        n_nodes, 
-        n_vehicles, 
-        
-        max_depth=args.max_depth,
-        
-        # @CONSTRAINT -- params
-        cap__data=cap__data,
-        cap__maxval=cap__maxval, 
-        # <<
-    )
-    
-    new_cost, new_pen = do_camce(
-        dist,
-        near, 
-        
-        node2pre,
-        node2suc,
-        node2route,
-        node2depot, 
-        
-        n_nodes, 
-        n_vehicles, 
-        
-        # @CONSTRAINT -- params
-        cap__data=cap__data,
-        cap__maxval=cap__maxval, 
-        # <<
-    )
+        new_cost, new_pen = do_camce(
+            dist,
+            near, 
+            
+            node2pre,
+            node2suc,
+            node2route,
+            node2depot, 
+            
+            n_nodes, 
+            n_vehicles, 
+            
+            # @CONSTRAINT -- params
+            cap__data=cap__data,
+            cap__maxval=cap__maxval, 
+            # <<
+        )
     
     tt += time() - t
     
@@ -169,7 +173,3 @@ for it in range(1000):
     # >>
     
     pos2node[pos2node < n_vehicles] = np.arange(n_vehicles)
-    
-
-
-print(best_route)
