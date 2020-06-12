@@ -1,11 +1,12 @@
 import numpy as np
-from numba import njit
+from numba import njit, objmode
 
 from simple_tsp.helpers import suc2cost
 from simple_tsp.constraints import cap
 from simple_tsp.execute import execute_ropt, reverse_ropt
 from simple_tsp.utils import EPS
 
+from time import time
 
 @njit(cache=True)
 def do_ce(
@@ -32,7 +33,7 @@ def do_ce(
         
         validate=False,
     ):
-
+    
     cost = suc2cost(node2suc, dist, n_vehicles)
     
     # >> @CONSTRAINT -- init
@@ -90,17 +91,18 @@ def do_ce(
                     cost -= sav
                     pen  -= gain
                     
-                    # if validate:
-                    #     c = suc2cost(node2suc, dist, n_vehicles)
-                    #     assert ((c - cost) ** 2) < EPS
+                    if validate:
+                        c = suc2cost(node2suc, dist, n_vehicles)
+                        assert ((c - cost) ** 2) < EPS
                         
-                    #     # >> @CONSTRAINT
-                    #     p = cap.routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
-                    #     assert p == pen
-                    #     # <<
+                        # >> @CONSTRAINT
+                        p = cap.routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
+                        assert p == pen
+                        # <<
                     
                     route2stale[move0[0, 2]] = True
                     route2stale[move0[1, 2]] = True
+    
     
     return cost, pen
 
@@ -183,6 +185,7 @@ def _find_move0(
                 cap__data,
                 cap__maxval,
             )
+            
             if (gain > 0) or (gain == 0 and sav > 0):
                 execute_ropt(move1, 1, node2pre, node2suc, node2route, node2depot)
                 return gain, sav

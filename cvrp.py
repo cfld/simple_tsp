@@ -59,12 +59,13 @@ def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=1
     
     return route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
 
+
 # --
 # CLI
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/G1.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
@@ -81,13 +82,13 @@ _ = set_seeds(args.seed)
 prob = load_problem(args.inpath)
 
 # >>
-best_route = np.load('/Users/bjohnson/Desktop/g1_routes.npy')
-# n_vehicles = 203 # l1
-n_vehicles = 485 # g1
+best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
+n_vehicles = 203 # l1
+# n_vehicles = 485 # g1
 # --
 # n_vehicles = prob['VEHICLES']    
 # <<
-cap        = prob['CAPACITY']
+cap = prob['CAPACITY']
 
 demand = np.array(list(prob['DEMAND_SECTION'].values()))
 demand = np.hstack([
@@ -152,7 +153,7 @@ prob = {
     "cap__maxval" : cap__maxval, 
     # <<
     
-    "validate" : True,
+    # "validate"       : True,
     # "improving_only" : True,
 }
 
@@ -170,8 +171,6 @@ t = time()
 inner_time = 0
 outer_iter = 0
 
-timers = [0, 0, 0]
-
 while True:
     outer_iter += 1
     
@@ -186,9 +185,7 @@ while True:
         # --
         # CE
         
-        tttt = time()
         _, _ = do_ce(dist, **prob)
-        timers[0] += time() - tttt
         
         # --
         # LK
@@ -228,10 +225,9 @@ while True:
     # --
     # Perturb
     
-    # prob['improving_only'] = True
+    prob['active'][:] = False
     for _ in range(p_iters):
         tttt = time()
-        prob['active'][:] = False
         
         node2suc   = prob['node2suc']
         node2pre   = prob['node2pre']
@@ -256,14 +252,13 @@ while True:
         
         prob['active'][n] = True
         prob['active'][m] = True
-        timers[2] += time() - tttt
         
-        tttt = time()
         _, _ = do_ce(pdist, **prob)
-        timers[1] += time() - tttt
         _, _ = do_rc(pdist, **prob)
+
+        prob['active'][n] = False
+        prob['active'][m] = False
     
-    print(timers)
     
     # prob['improving_only'] = np.random.choice([True, False], p=[0.95, 0.05])
     prob['active'][:] = prob['route2stale'][prob['node2route']]
