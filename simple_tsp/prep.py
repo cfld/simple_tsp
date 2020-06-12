@@ -76,13 +76,17 @@ def load_solution(inpath):
 # --
 # Generate candidate edges
 
+@njit(cache=True)
 def knn_candidates(dist, n_cands, n_vehicles=1):
     big_val = 2 * dist.max()
     mask    = np.eye(dist.shape[0]) * big_val # can't be near self
     mask[:n_vehicles,:n_vehicles] = big_val   # depots can't be close
+    mdist = dist + mask
     
-    cand_idx = np.argsort(dist + mask, axis=-1)
-    cand_idx = cand_idx[:,:n_cands]
+    cand_idx = np.zeros((dist.shape[0], n_cands), dtype=np.int64)
+    for i in range(dist.shape[0]):
+        cand_idx[i] = np.argsort(mdist[i])[:n_cands]
+    
     return cand_idx
     
 # --

@@ -17,13 +17,18 @@ def do_ce(
         node2route,
         node2depot,
         
+        active,
         route2stale,
         
         n_nodes,
         n_vehicles,
         
+        # >> @CONSTRAINT
         cap__data,
         cap__maxval,
+        # <<
+        
+        validate=False
     ):
 
     cost = suc2cost(node2suc, dist, n_vehicles)
@@ -39,7 +44,9 @@ def do_ce(
     while improved:
         improved = False
 
-        for n00 in np.random.permutation(n_nodes):
+        for n00 in range(n_nodes):
+            if not active[n00]: continue
+            
             for d0 in [1, -1]:
                 forward0 = d0 == 1
                 
@@ -78,6 +85,15 @@ def do_ce(
                     improved = True
                     cost -= sav
                     pen  -= gain
+                    
+                    # if validate:
+                    #     c = suc2cost(node2suc, dist, n_vehicles)
+                    #     assert ((c - cost) ** 2) < EPS
+                        
+                    #     # >> @CONSTRAINT
+                    #     p = cap.routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
+                    #     assert p == pen
+                    #     # <<
                     
                     route2stale[move0[0, 2]] = True
                     route2stale[move0[1, 2]] = True
@@ -124,7 +140,7 @@ def _find_move0(
                 - dist[n01, n10]
             )
             
-            # if sav0 < 0: continue # improving moves -- optional
+            if sav0 < EPS: continue # improving moves -- optional
             
             move0[1] = (n10, n11, r1, np.int64(not forward1))
             

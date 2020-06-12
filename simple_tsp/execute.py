@@ -6,27 +6,17 @@ from numba import njit
 # Generic
 
 @njit(cache=True)
-def switch_depot(n, new_depot, node2pre, node2suc, node2route, node2depot, dir=1):
+def switch_depot(n, new_depot, node2pre, node2suc, node2route, node2depot):
     if node2depot[n]: return
     
-    if dir == 1:
-        while True:
-            nn = node2suc[n]
-            node2route[n] = new_depot
-            if node2depot[nn]:
-                node2suc[n] = new_depot
-                node2pre[new_depot] = n
-                return
-            n = nn
-    else:
-        while True:
-            nn = node2pre[n]
-            node2route[n] = new_depot
-            if node2depot[nn]:
-                node2pre[n] = new_depot
-                node2suc[new_depot] = n
-                return
-            n = nn
+    while True:
+        nn = node2suc[n]
+        node2route[n] = new_depot
+        if node2depot[nn]:
+            node2suc[n] = new_depot
+            node2pre[new_depot] = n
+            return
+        n = nn
 
 @njit(cache=True)
 def flip_route(depot, node2pre, node2suc, node2depot):
@@ -66,7 +56,9 @@ def execute_ropt(move, depth, node2pre, node2suc, node2route, node2depot):
     
     # Change edges
     for i in range(n_moves):
-        j   = (i + 1) % n_moves
+        j = (i + 1) % n_moves
+        # if j == n_moves: j = 0
+        
         n01 = move[i, 1]
         n10 = move[j, 0]
         r   = move[j, 2]

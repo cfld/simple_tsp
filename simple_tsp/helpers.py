@@ -57,29 +57,27 @@ def walk_route(depot, node2suc):
     
     return np.array(route)
 
-
+@njit(cache=True)
 def walk_routes(node2suc, n_nodes, n_vehicles, verbose=False):
     if verbose: print('-' * 50)
-    routes = []
-    counter = 0
+    routes  = np.zeros_like(node2suc)
+    offset = 0
     for depot in range(n_vehicles):
-        route = []
         node = depot
         while True:
             if verbose: print(node)
             
-            route.append(node)
-            counter += 1
+            routes[offset] = node
+            offset += 1
             
             node = node2suc[node]
             if node == depot: break
             
-            if counter > len(node2suc) + 2: raise Exception('!! loop detected')
+            if offset > len(node2suc) + 2: raise Exception('!! loop detected')
         
         if verbose: print('-' * 10)
-        routes.append(route)
     
-    if counter != n_nodes: 
+    if offset != n_nodes: 
         raise Exception('!! invalid route')
         
     return routes

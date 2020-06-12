@@ -11,7 +11,7 @@ def partial(node, before, node2suc, node2pre, node2depot, val):
     return p
 
 
-@njit(cache=True)
+@njit(cache=True, inline='always')
 def compute_gain(acc, depth, cap):
     p_new, p_old = 0, 0
     for i in range(depth + 1):
