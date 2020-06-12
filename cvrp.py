@@ -9,9 +9,13 @@
         - How are penalties implemented in RoutingSolver?
     
     # !! With multiple nodes as depot, some neighbors are going to be all depot
+    
+    # !! Relax sequential requirement, sometimes
+    # !! Size of perturbations?
 """
 
 import os
+import sys
 import argparse
 import numpy as np
 from time import time
@@ -123,8 +127,6 @@ best_cost = suc2cost(node2suc, dist, n_vehicles)
 best_pen  = 0
 # >>
 
-print(best_cost, best_pen)
-
 # Perturb
 node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
 
@@ -167,7 +169,6 @@ for outer_iter in range(10_000):
     inner_iter = 0
     
     tt = time()
-    print('-')
     ref_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
     while True:
         ttt = time()
@@ -199,6 +200,7 @@ for outer_iter in range(10_000):
         new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
         inner_time += time() - ttt
         print(outer_iter, inner_iter, best_cost, new_cost, time() - t, inner_time)
+        sys.stdout.flush()
         
         if new_cost < ref_cost:
             ref_cost = new_cost
@@ -213,8 +215,6 @@ for outer_iter in range(10_000):
     # --
     # Perturb
     
-    z = time()
-    
     for _ in range(128):
         prob['active'][:] = False
         
@@ -222,12 +222,10 @@ for outer_iter in range(10_000):
         node2pre   = prob['node2pre']
         node2depot = prob['node2depot']
         
-        # compute worst edge (longest, widest, or average)
         edge_lengths = cost[np.arange(n_nodes), node2suc]
         
         n = edge_lengths.argmax()
         m = node2suc[n]
-        # print('bad_edge', n, m)
         
         if node2depot[n] == 1: n = node2depot == 1 # change cost for all depot nodes
         if node2depot[m] == 1: m = node2depot == 1
@@ -247,9 +245,7 @@ for outer_iter in range(10_000):
         _, _ = do_ce(pdist, **prob)
         _, _ = do_rc(pdist, **prob)
     
-    # prob['route2stale'][:] = True
     prob['active'][:] = prob['route2stale'][prob['node2route']]
-    
     prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
         dumb_lk(dist, prob['node2suc'], n_nodes, n_vehicles, route2stale=prob['route2stale'])
 
