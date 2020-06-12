@@ -28,7 +28,9 @@ def do_ce(
         cap__maxval,
         # <<
         
-        validate=False
+        improving_only=True,
+        
+        validate=False,
     ):
 
     cost = suc2cost(node2suc, dist, n_vehicles)
@@ -44,8 +46,8 @@ def do_ce(
     while improved:
         improved = False
 
-        for n00 in range(n_nodes):
-            if not active[n00]: continue
+        active_nodes = np.where(active)[0]
+        for n00 in np.random.permutation(active_nodes):
             
             for d0 in [1, -1]:
                 forward0 = d0 == 1
@@ -80,6 +82,8 @@ def do_ce(
 
                     cap__data,
                     cap__maxval,
+                    
+                    improving_only=improving_only
                 )
                 if (gain > 0) or (gain == 0 and sav > EPS):
                     improved = True
@@ -118,6 +122,7 @@ def _find_move0(
 
             cap__data,
             cap__maxval,
+            improving_only,
     ):
     
     (n00, n01, r0, _) = move0[0]
@@ -140,7 +145,7 @@ def _find_move0(
                 - dist[n01, n10]
             )
             
-            if sav0 < EPS: continue # improving moves -- optional
+            if improving_only and sav0 < EPS: continue # improving moves -- optional
             
             move0[1] = (n10, n11, r1, np.int64(not forward1))
             
@@ -229,6 +234,7 @@ def _find_move1(
         for xd1 in [1, -1]: # xforward1
             xforward1 = xd1 == 1
             
+            # Reset nodes for 0
             x00          = x00_
             x01          = x01_
             cap__acc1[0] = tmp0
@@ -242,37 +248,45 @@ def _find_move1(
             
             while True: # x00
                 
+                # Reset nodes for 1
                 x10 = x10_
                 x11 = x11_
                 cap__acc1[1] = tmp1
                 
                 while True: # x10
-                    gain1 = gain0 + cap.compute_gain(cap__acc1, 1, cap__maxval)
-                    if gain1 >= 0:
-                        sav1 = sav0 + (
-                            + dist[x00, x01]
-                            + dist[x10, x11]
-                            - dist[x00, x11]
-                            - dist[x01, x10]
-                        )
-                        if sav1 > 0:
-                            move1 = np.array((
-                                (x00, x01, r0, np.int64(not xforward0)),
-                                (x10, x11, r1, np.int64(not xforward1)),
-                            ), dtype=np.int64)
-                            return move1, gain1, sav1
+                    if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
+                    if cap__acc1[0, 0] + cap__acc1[1, 1] <= cap__maxval:
+                        gain1 = gain0 + cap.compute_gain(cap__acc1, 1, cap__maxval)
+                        # gain1 = gain0 + cap.compute_gain2(cap__acc1, cap__maxval)
+                        if gain1 >= 0:
+                            sav1 = sav0 + (
+                                + dist[x00, x01]
+                                + dist[x10, x11]
+                                - dist[x00, x11]
+                                - dist[x01, x10]
+                            )
+                            if sav1 > 0:
+                                move1 = np.array((
+                                    (x00, x01, r0, np.int64(not xforward0)),
+                                    (x10, x11, r1, np.int64(not xforward1)),
+                                ), dtype=np.int64)
+                                return move1, gain1, sav1
                     
                     if node2depot[x11]: break
                     x10 = x11
                     x11 = node2suc[x10] if xforward1 else node2pre[x10]
-                    cap.slide_node(cap__acc1[1], x10, xforward1, cap__data)
+                    # cap.slide_node(cap__acc1[1], x10, xforward1, cap__data)
+                    cap__acc1[1, 0] += cap__data[x10]
+                    cap__acc1[1, 1] -= cap__data[x10]
                     
-                    if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
                 
                 if node2depot[x01]: break
                 x00 = x01
                 x01 = node2suc[x00] if xforward0 else node2pre[x00]
-                cap.slide_node(cap__acc1[0], x00, xforward0, cap__data)
+                
+                # cap.slide_node(cap__acc1[0], x00, xforward0, cap__data)
+                cap__acc1[0, 0] += cap__data[x00]
+                cap__acc1[0, 1] -= cap__data[x00]
     
     return move1, 0, 0
     

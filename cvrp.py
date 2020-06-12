@@ -12,6 +12,8 @@
     
     # !! Relax sequential requirement, sometimes
     # !! Size of perturbations?
+    # !! Width-based perturbations
+    # !! Anneal perturbations?
 """
 
 import os
@@ -27,7 +29,7 @@ from simple_tsp.prep import load_problem, random_init, route2lookups, knn_candid
 
 from simple_tsp.moves.rc import do_rc
 from simple_tsp.moves.ce import do_ce
-from simple_tsp.moves.ropt import do_ropt
+# from simple_tsp.moves.ropt import do_ropt
 from simple_tsp.moves.lk import lk_solve
 
 from simple_tsp.helpers import suc2cost, walk_routes, walk_route
@@ -62,7 +64,7 @@ def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=1
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/G1.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
@@ -79,8 +81,9 @@ _ = set_seeds(args.seed)
 prob = load_problem(args.inpath)
 
 # >>
-best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
-n_vehicles = 203
+best_route = np.load('/Users/bjohnson/Desktop/g1_routes.npy')
+# n_vehicles = 203 # l1
+n_vehicles = 485 # g1
 # --
 # n_vehicles = prob['VEHICLES']    
 # <<
@@ -149,7 +152,8 @@ prob = {
     "cap__maxval" : cap__maxval, 
     # <<
     
-    # "validate" : True,
+    "validate" : True,
+    # "improving_only" : True,
 }
 
 pdist = dist.copy()
@@ -159,10 +163,17 @@ pens  = np.zeros(dist.shape, dtype=np.int64)
 # --
 # Optimize
 
+p_iters = 64
+
+print('start', file=sys.stderr)
 t = time()
 inner_time = 0
-for outer_iter in range(10_000):
-    
+outer_iter = 0
+
+timers = [0, 0, 0]
+
+while True:
+    outer_iter += 1
     
     # prob['active'][:] = True
     
@@ -175,7 +186,9 @@ for outer_iter in range(10_000):
         # --
         # CE
         
+        tttt = time()
         _, _ = do_ce(dist, **prob)
+        timers[0] += time() - tttt
         
         # --
         # LK
@@ -215,7 +228,9 @@ for outer_iter in range(10_000):
     # --
     # Perturb
     
-    for _ in range(128):
+    # prob['improving_only'] = True
+    for _ in range(p_iters):
+        tttt = time()
         prob['active'][:] = False
         
         node2suc   = prob['node2suc']
@@ -241,11 +256,28 @@ for outer_iter in range(10_000):
         
         prob['active'][n] = True
         prob['active'][m] = True
+        timers[2] += time() - tttt
         
+        tttt = time()
         _, _ = do_ce(pdist, **prob)
+        timers[1] += time() - tttt
         _, _ = do_rc(pdist, **prob)
     
+    print(timers)
+    
+    # prob['improving_only'] = np.random.choice([True, False], p=[0.95, 0.05])
     prob['active'][:] = prob['route2stale'][prob['node2route']]
     prob['node2pre'], prob['node2suc'], prob['node2route'], prob['node2depot'], _ = \
         dumb_lk(dist, prob['node2suc'], n_nodes, n_vehicles, route2stale=prob['route2stale'])
+    
+    if outer_iter == 2_500:
+        p_iters = int(p_iters / 2)
+    
+    if outer_iter == 5_000:
+        p_iters = int(p_iters / 2)
+    
+    if outer_iter == 10_000:
+        p_iters = int(p_iters / 2)
 
+    if outer_iter == 50_5000:
+        p_iters = int(p_iters / 2)

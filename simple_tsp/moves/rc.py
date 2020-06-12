@@ -33,6 +33,8 @@ def do_rc(
         cap__maxval, 
         # <<
         
+        improving_only=True,
+        
         validate=False,
     ):
     
@@ -45,14 +47,23 @@ def do_rc(
     improved = True
     while improved:
         improved = False
-        for r0 in range(n_vehicles):
+        for r0 in np.random.permutation(n_vehicles):
             n0 = node2suc[r0]
             while not node2depot[n0]:
                 n0_pre = node2pre[n0]
                 n0_suc = node2suc[n0]
                 
                 if active[n0]:
-                    sav, gain  = _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav=0)
+                    sav, gain  = _find_insert(
+                        n0, n0_pre, n0_suc, r0, 
+                        dist, near, 
+                        node2pre, node2suc, node2route, node2depot, route2stale, 
+                        n_nodes, n_vehicles, 
+                        cap__data, cap__maxval, 
+                        slacks, 
+                        sav=0,
+                        improving_only=improving_only,
+                    )
                     if sav > EPS:
                         improved = True
                         cost -= sav
@@ -75,7 +86,7 @@ def do_rc(
     return cost, 0
 
 @njit(cache=True, inline=CostModel(4))
-def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav, depth=1, max_depth=3):
+def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2route, node2depot, route2stale, n_nodes, n_vehicles, cap__data, cap__maxval, slacks, sav, improving_only, depth=1, max_depth=3):
     sav_pop = sav + (
         + dist[n0, n0_pre]
         + dist[n0, n0_suc]
@@ -98,20 +109,21 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                 - dist[n0, n1_neib]
             )
             
-            # exit now
-            if sav_pop_push < EPS: continue
+            if improving_only and sav_pop_push < EPS: continue
             
-            # >> @CONSTRAINT
-            if slacks[r1] >= cap__data[n0] and slacks[r0] + cap__data[n0] >= 0:
-            # <<
-                execute_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+            # exit now
+            if sav_pop_push > EPS:
                 # >> @CONSTRAINT
-                slacks[r0] += cap__data[n0]
-                slacks[r1] -= cap__data[n0]
+                if slacks[r1] >= cap__data[n0] and slacks[r0] + cap__data[n0] >= 0:
                 # <<
-                route2stale[r0] = True
-                route2stale[r1] = True
-                return sav_pop_push, 0
+                    execute_relocate(n0, n0_pre, n0_suc, n1, n1_neib, forward1, node2pre, node2suc, node2route)
+                    # >> @CONSTRAINT
+                    slacks[r0] += cap__data[n0]
+                    slacks[r1] -= cap__data[n0]
+                    # <<
+                    route2stale[r0] = True
+                    route2stale[r1] = True
+                    return sav_pop_push, 0
             
             # go deeper
             if depth < max_depth:
@@ -134,7 +146,8 @@ def _find_insert(n0, n0_pre, n0_suc, r0, dist, near, node2pre, node2suc, node2ro
                             slacks,
                             sav=sav_pop_push, 
                             depth=depth + 1,
-                            max_depth=max_depth
+                            max_depth=max_depth,
+                            improving_only=improving_only,
                         )
                         if sav1 > EPS:
                             route2stale[r0] = True

@@ -24,6 +24,19 @@ def compute_gain(acc, depth, cap):
     gain = p_old - p_new
     return gain
 
+@njit(cache=True, inline='always')
+def compute_gain2(acc, cap):
+    p_old = (
+        + max(0, acc[0, 0] + acc[0, 1] - cap)
+        + max(0, acc[1, 0] + acc[1, 1] - cap)
+    )
+    p_new = (
+        + max(0, acc[0, 1] + acc[1, 0] - cap)
+        + max(0, acc[0, 0] + acc[1, 1] - cap)
+    )
+    gain = p_old - p_new
+    return gain
+
 
 @njit(cache=True)
 def route2pen(depot, node2suc, node2pen, cap):

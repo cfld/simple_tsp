@@ -78,6 +78,7 @@ def load_solution(inpath):
 
 @njit(cache=True)
 def knn_candidates(dist, n_cands, n_vehicles=1):
+    # !! Could be rewritten w/ argpartition
     big_val = 2 * dist.max()
     mask    = np.eye(dist.shape[0]) * big_val # can't be near self
     mask[:n_vehicles,:n_vehicles] = big_val   # depots can't be close
