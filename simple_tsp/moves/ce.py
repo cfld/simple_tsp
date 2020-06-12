@@ -257,39 +257,44 @@ def _find_move1(
                 cap__acc1[1] = tmp1
                 
                 while True: # x10
-                    if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
-                    if cap__acc1[0, 0] + cap__acc1[1, 1] <= cap__maxval:
-                        gain1 = gain0 + cap.compute_gain(cap__acc1, 1, cap__maxval)
-                        # gain1 = gain0 + cap.compute_gain2(cap__acc1, cap__maxval)
-                        if gain1 >= 0:
-                            sav1 = sav0 + (
-                                + dist[x00, x01]
-                                + dist[x10, x11]
-                                - dist[x00, x11]
-                                - dist[x01, x10]
-                            )
-                            if sav1 > 0:
-                                move1 = np.array((
-                                    (x00, x01, r0, np.int64(not xforward0)),
-                                    (x10, x11, r1, np.int64(not xforward1)),
-                                ), dtype=np.int64)
-                                return move1, gain1, sav1
+                    gain1 = gain0 + cap.compute_gain(cap__acc1, 1, cap__maxval)
+                    if gain1 >= 0:
+                        sav1 = sav0 + (
+                            + dist[x00, x01]
+                            + dist[x10, x11]
+                            - dist[x00, x11]
+                            - dist[x01, x10]
+                        )
+                        if sav1 > 0:
+                            move1 = np.array((
+                                (x00, x01, r0, np.int64(not xforward0)),
+                                (x10, x11, r1, np.int64(not xforward1)),
+                            ), dtype=np.int64)
+                            return move1, gain1, sav1
                     
                     if node2depot[x11]: break
                     x10 = x11
                     x11 = node2suc[x10] if xforward1 else node2pre[x10]
-                    # cap.slide_node(cap__acc1[1], x10, xforward1, cap__data)
-                    cap__acc1[1, 0] += cap__data[x10]
-                    cap__acc1[1, 1] -= cap__data[x10]
+                    # >>
+                    cap.slide_node(cap__acc1[1], x10, xforward1, cap__data)
+                    # --
+                    # cap__acc1[1, 0] += cap__data[x10]
+                    # cap__acc1[1, 1] -= cap__data[x10]
+                    # <<
+                    
+                    if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
                     
                 
                 if node2depot[x01]: break
                 x00 = x01
                 x01 = node2suc[x00] if xforward0 else node2pre[x00]
                 
-                # cap.slide_node(cap__acc1[0], x00, xforward0, cap__data)
-                cap__acc1[0, 0] += cap__data[x00]
-                cap__acc1[0, 1] -= cap__data[x00]
+                # >>
+                cap.slide_node(cap__acc1[0], x00, xforward0, cap__data)
+                # --
+                # cap__acc1[0, 0] += cap__data[x00]
+                # cap__acc1[0, 1] -= cap__data[x00]
+                # <<
     
     return move1, 0, 0
     
