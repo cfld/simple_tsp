@@ -26,9 +26,12 @@ import numpy as np
 from time import time
 from scipy.spatial.distance import squareform, pdist
 
+from clark_wright import clark_wright
+
 from simple_tsp.helpers import set_seeds
 from simple_tsp.perturb import double_bridge_kick, double_bridge_kick_targeted
-from simple_tsp.prep import load_problem, random_init, route2lookups, knn_candidates
+from simple_tsp.prep import load_problem, random_init, route2lookups, knn_candidates, augment_vehicles
+from simple_tsp.constraints.cap import routes2pen
 
 from simple_tsp.moves.rc import do_rc
 from simple_tsp.moves.ce import do_ce
@@ -37,10 +40,11 @@ from simple_tsp.moves.lk import lk_solve
 
 from simple_tsp.helpers import suc2cost, walk_routes, walk_route
 
+PENALTY_INCREMENT = 7
+
 # --
 # Helpers
 
-from numba import njit
 # @njit(cache=True)
 def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=10):
     pos2node = walk_routes(node2suc, n_nodes, n_vehicles)
@@ -68,7 +72,7 @@ def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=1
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
@@ -84,35 +88,25 @@ _ = set_seeds(args.seed)
 
 prob = load_problem(args.inpath)
 
-# >>
-# best_route = np.load('/Users/bjohnson/Desktop/g1_routes.npy')
-# n_vehicles = 203 # l1
-# n_vehicles = 485 # g1
-# --
-n_vehicles = prob['VEHICLES']
-# <<
-cap = prob['CAPACITY']
-
+xy     = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
 demand = np.array(list(prob['DEMAND_SECTION'].values()))
-demand = np.hstack([
-    np.repeat(0, n_vehicles),
-    demand[1:]
-])
+cap    = prob['CAPACITY']
 
-n_nodes = demand.shape[0]
+depot_id = 0
+dist     = squareform(pdist(xy)).round().astype(np.int32)
 
 # --
-# Distance
+# Compute initial solution w/ Clark-Wright savings algorithm
 
-xy = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
-# xy = xy + np.arange(xy.shape[0]).reshape(-1, 1) / xy.shape[0] # prevent ties
+cw_routes  = clark_wright(dist, demand, cap, depot_id, n_close=100)
+n_vehicles = len(cw_routes)
 
-xy = np.row_stack([
-    np.repeat(xy[0].reshape(1, -1), n_vehicles, axis=0),
-    xy[1:]
-])
+# --
+# Convert to appropriate format
 
-dist = squareform(pdist(xy)).round().astype(np.int32)
+dist, demand, best_route = augment_vehicles(dist, demand, cw_routes, n_vehicles)
+n_nodes = dist.shape[0]
+
 near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
 # --
@@ -124,18 +118,13 @@ cap__maxval = cap
 # --
 # Init
 
-# <<
-from simple_tsp.constraints.cap import routes2pen
-
-# >>
-# best_route = random_init(n_nodes=n_nodes, n_vehicles=n_vehicles)
-# <<
-
 pos2node = best_route.copy()
 node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
-best_pen   = routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
 best_cost  = suc2cost(node2suc, dist, n_vehicles)
+best_pen   = routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
 assert best_pen == 0
+
+print(best_cost, best_pen)
 
 # --
 # Run
@@ -159,7 +148,7 @@ prob = {
     "cap__maxval" : cap__maxval, 
     # <<
     
-    "validate"       : True,
+    # "validate"       : True,
     # "improving_only" : True,
 }
 
@@ -250,8 +239,8 @@ while True:
         pens[n, m]  += 1
         pens[m, n]  += 1
         
-        pdist[n, m] += 7
-        pdist[m, n] += 7
+        pdist[n, m] += PENALTY_INCREMENT
+        pdist[m, n] += PENALTY_INCREMENT
         
         cost[n, m] *= (pens[n, m] / (1 + pens[n, m]))
         cost[m, n] *= (pens[m, n] / (1 + pens[m, n]))
@@ -280,5 +269,5 @@ while True:
     if outer_iter == 10_000:
         p_iters = int(p_iters / 2)
 
-    if outer_iter == 50_5000:
+    if outer_iter == 50_000:
         p_iters = int(p_iters / 2)

@@ -103,6 +103,32 @@ def random_init(n_nodes, n_vehicles=1, random_state=None):
 # --
 # Initialize datastructures
 
+def augment_vehicles(dist, demand, routes, n_vehicles, depot_id=0):
+    assert depot_id == 0
+    assert n_vehicles == len(routes)
+    
+    n_customers = dist.shape[0] - 1
+    
+    sel = np.hstack([
+        np.repeat(0, n_vehicles),
+        np.arange(n_customers) + 1
+    ])
+    
+    dist   = dist[sel][:,sel]
+    demand = demand[sel]
+    
+    new_routes = []
+    for route_idx, route in enumerate(routes):
+        route = np.hstack([
+            [route_idx],
+            route + n_vehicles
+        ])
+        new_routes.append(route)
+    
+    new_routes = np.hstack(new_routes)
+    
+    return dist, demand, new_routes
+
 @njit(cache=True)
 def route2lookups(pos2node, n_nodes, n_vehicles):
     node2pos   = np.argsort(pos2node)
