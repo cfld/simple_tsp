@@ -3,12 +3,15 @@
 """
     run_cam.py
     
-    # !! Should run LK on individual routes
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # !! Right now, only works if route is initialized to have 0 penalty
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    
+    # !! LK assumes that penalties are permutation invariant
+    
     # !! Perturbations should target routes w/ penalties
     # !! Perturb with penalties, double bridge kick is too large, I think
         - How are penalties implemented in RoutingSolver?
-    
-    # !! With multiple nodes as depot, some neighbors are going to be all depot
     
     # !! Relax sequential requirement, sometimes
     # !! Size of perturbations?
@@ -53,7 +56,7 @@ def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=1
         proute  = np.hstack((proute, np.array([0])))
         
         subdist = dist[route][:,route]
-        subnear = knn_candidates(subdist, n_cands=n_cands, n_vehicles=1)
+        subnear = knn_candidates(subdist, n_cands=min(len(route), n_cands), n_vehicles=1)
         
         pos2node[pos2route == depot] = route[lk_solve(subdist, subnear, proute, depth=depth)[:-1]]
     
@@ -65,7 +68,7 @@ def dumb_lk(dist, node2suc, n_nodes, n_vehicles, route2stale, depth=4, n_cands=1
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Belgium/L1.vrp')
+    parser.add_argument('--inpath',       type=str, default='data/cvrp/INSTANCES/Uchoa/X-n101-k25.vrp')
     parser.add_argument('--n-cands',      type=int, default=10)
     parser.add_argument('--n-iters',      type=int, default=1000)
     parser.add_argument('--max-depth',    type=int, default=4)
@@ -82,11 +85,11 @@ _ = set_seeds(args.seed)
 prob = load_problem(args.inpath)
 
 # >>
-best_route = np.load('/Users/bjohnson/Desktop/routes.npy')
-n_vehicles = 203 # l1
+# best_route = np.load('/Users/bjohnson/Desktop/g1_routes.npy')
+# n_vehicles = 203 # l1
 # n_vehicles = 485 # g1
 # --
-# n_vehicles = prob['VEHICLES']    
+n_vehicles = prob['VEHICLES']
 # <<
 cap = prob['CAPACITY']
 
@@ -102,7 +105,7 @@ n_nodes = demand.shape[0]
 # Distance
 
 xy = np.row_stack(list(prob['NODE_COORD_SECTION'].values()))
-xy = xy + np.arange(xy.shape[0]).reshape(-1, 1) / xy.shape[0] # prevent ties
+# xy = xy + np.arange(xy.shape[0]).reshape(-1, 1) / xy.shape[0] # prevent ties
 
 xy = np.row_stack([
     np.repeat(xy[0].reshape(1, -1), n_vehicles, axis=0),
@@ -113,26 +116,29 @@ dist = squareform(pdist(xy)).round().astype(np.int32)
 near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
 # --
-# Run
+# Constraints
 
 cap__data   = demand
 cap__maxval = cap
 
-# Init
-# <<
-# best_route = random_init(n_vehicles, n_nodes)
-# best_pen  = np.inf
-# best_cost = np.inf
-# pos2node = best_route.copy()
 # --
+# Init
+
+# <<
+from simple_tsp.constraints.cap import routes2pen
+
+# >>
+# best_route = random_init(n_nodes=n_nodes, n_vehicles=n_vehicles)
+# <<
+
 pos2node = best_route.copy()
 node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
-best_cost = suc2cost(node2suc, dist, n_vehicles)
-best_pen  = 0
-# >>
+best_pen   = routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
+best_cost  = suc2cost(node2suc, dist, n_vehicles)
+assert best_pen == 0
 
-# Perturb
-node2pre, node2suc, node2route, node2depot, _ = route2lookups(pos2node, n_nodes=n_nodes, n_vehicles=n_vehicles)
+# --
+# Run
 
 prob = {
     "near" : near, 
@@ -153,7 +159,7 @@ prob = {
     "cap__maxval" : cap__maxval, 
     # <<
     
-    # "validate"       : True,
+    "validate"       : True,
     # "improving_only" : True,
 }
 
@@ -166,7 +172,8 @@ pens  = np.zeros(dist.shape, dtype=np.int64)
 
 p_iters = 64
 
-print('start', file=sys.stderr)
+print('cvrp.py: start', file=sys.stderr)
+
 t = time()
 inner_time = 0
 outer_iter = 0
@@ -178,10 +185,10 @@ while True:
     
     inner_iter = 0
     
-    tt = time()
     ref_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
     while True:
-        ttt = time()
+        tt = time()
+        
         # --
         # CE
         
@@ -207,8 +214,9 @@ while True:
         # --
         # Score
         
+        inner_time += time() - tt
+        
         new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
-        inner_time += time() - ttt
         print(outer_iter, inner_iter, best_cost, new_cost, time() - t, inner_time)
         sys.stdout.flush()
         
@@ -227,8 +235,6 @@ while True:
     
     prob['active'][:] = False
     for _ in range(p_iters):
-        tttt = time()
-        
         node2suc   = prob['node2suc']
         node2pre   = prob['node2pre']
         node2depot = prob['node2depot']

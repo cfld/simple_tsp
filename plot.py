@@ -8,6 +8,8 @@ for inpath in sys.argv[1:]:
     df = pd.read_csv(inpath, sep=' ', header=None)
     # _ = plt.plot(df[2], label='best')
     _ = plt.plot(df[0], df[3], label=f'curr {inpath}')
+    print(df[3].min())
+
 
 _ = plt.grid('both')
 _ = plt.legend()
