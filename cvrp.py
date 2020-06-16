@@ -109,6 +109,8 @@ n_nodes = dist.shape[0]
 
 near = knn_candidates(dist, n_cands=args.n_cands, n_vehicles=n_vehicles)
 
+print(best_route)
+
 # --
 # Constraints
 
@@ -125,6 +127,7 @@ best_pen   = routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
 assert best_pen == 0
 
 print(best_cost, best_pen)
+raise Exception()
 
 # --
 # Run

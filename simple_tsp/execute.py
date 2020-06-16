@@ -95,7 +95,7 @@ def reverse_ropt2(n00, n01, r0, flip0, n10, n11, r1, flip1, node2pre, node2suc, 
         flip_route(r0, node2pre, node2suc, node2depot)
     
     add_edge(n11, n10, r1, node2pre, node2suc, node2route, node2depot)
-    if flip0:
+    if flip1:
         flip_route(r1, node2pre, node2suc, node2depot)
 
 
