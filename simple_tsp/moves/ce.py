@@ -46,9 +46,14 @@ def do_ce(
     improved = True
     while improved:
         improved = False
-
-        active_nodes = np.where(active)[0]
-        for n00 in np.random.permutation(active_nodes):
+        
+        # active_nodes = np.where(active)[0]
+        # >>
+        # for n00 in np.random.permutation(active_nodes):
+        # --
+        for n00 in range(n_nodes):
+            if not active[n00]: continue
+        # <<
             
             for d0 in [1, -1]:
                 forward0 = d0 == 1
@@ -91,6 +96,8 @@ def do_ce(
                     cost -= sav
                     pen  -= gain
                     
+                    # print('*', cost, pen, sav, gain)
+                    
                     if validate:
                         c = suc2cost(node2suc, dist, n_vehicles)
                         assert ((c - cost) ** 2) < EPS
@@ -102,7 +109,6 @@ def do_ce(
                     
                     route2stale[move0[0, 2]] = True
                     route2stale[move0[1, 2]] = True
-    
     
     return cost, pen
 
@@ -270,6 +276,7 @@ def _find_move1(
                                 (x00, x01, r0, np.int64(not xforward0)),
                                 (x10, x11, r1, np.int64(not xforward1)),
                             ), dtype=np.int64)
+                            
                             return move1, gain1, sav1
                     
                     if node2depot[x11]: break
@@ -282,7 +289,7 @@ def _find_move1(
                     # cap__acc1[1, 1] -= cap__data[x10]
                     # <<
                     
-                    if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
+                    # if cap__acc1[0, 1] + cap__acc1[1, 0] > cap__maxval: break # more pruning
                     
                 
                 if node2depot[x01]: break

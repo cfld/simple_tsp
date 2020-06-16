@@ -158,7 +158,7 @@ for _ in range(2):
     }
 
     t = time()
-    _, _, _ = do_ce(dist, **prob)
+    _, _ = do_ce(dist, **prob)
     print(time() - t)
     
     print(suc2cost(prob['node2suc'], dist, n_vehicles))

@@ -127,7 +127,7 @@ best_pen   = routes2pen(node2suc, n_vehicles, cap__data, cap__maxval)
 assert best_pen == 0
 
 print(best_cost, best_pen)
-raise Exception()
+
 
 # --
 # Run
@@ -158,6 +158,15 @@ prob = {
 pdist = dist.copy()
 cost  = dist.copy().astype(np.float64)
 pens  = np.zeros(dist.shape, dtype=np.int64)
+
+# >>
+t = time()
+_, _ = do_ce(dist, **prob)
+print('elapsed', time() - t)
+new_cost = suc2cost(prob['node2suc'], dist, n_vehicles)
+print('new_cost', new_cost)
+raise Exception()
+# <<
 
 # --
 # Optimize
