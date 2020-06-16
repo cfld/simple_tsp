@@ -121,7 +121,7 @@ def augment_vehicles(dist, demand, routes, n_vehicles, depot_id=0):
     for route_idx, route in enumerate(routes):
         route = np.hstack([
             [route_idx],
-            route + n_vehicles
+            np.array(route) + n_vehicles
         ])
         new_routes.append(route)
     
