@@ -33,10 +33,10 @@ def get_distance_matrix(prob, n_vehicles=1):
         
         dist = squareform(pdist(xy))
         
-        # if edge_weight_type == 'EUC_2D':
-        #     dist = np.round(dist).astype(np.int64)
-        # elif edge_weight_type == 'CEIL_2D':
-        #     dist = np.ceil(dist).astype(np.int64)
+        if edge_weight_type == 'EUC_2D':
+            dist = np.round(dist).astype(np.int64)
+        elif edge_weight_type == 'CEIL_2D':
+            dist = np.ceil(dist).astype(np.int64)
     
     elif edge_weight_type == 'EXPLICIT':
         assert n_vehicles == 1
@@ -108,6 +108,8 @@ def augment_vehicles(dist, demand, routes, n_vehicles, depot_id=0):
     assert n_vehicles == len(routes)
     
     n_customers = dist.shape[0] - 1
+    assert np.hstack(routes).min() == 0
+    assert np.hstack(routes).max() == n_customers - 1
     
     sel = np.hstack([
         np.repeat(0, n_vehicles),
@@ -127,7 +129,7 @@ def augment_vehicles(dist, demand, routes, n_vehicles, depot_id=0):
     
     new_routes = np.hstack(new_routes)
     
-    return dist, demand, new_routes
+    return dist, demand, new_routes, sel
 
 @njit(cache=True)
 def route2lookups(pos2node, n_nodes, n_vehicles):
