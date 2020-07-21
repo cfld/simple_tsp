@@ -36,3 +36,6 @@ __Note:__ `numba` compiles functions the first time you run the code, so the fir
 - [ ] Implement better initializations.  Currently initializing randomly.
 - [ ] Benchmarking against {LKH, or-tools, other Python implementations}
 
+## License
+
+MIT
